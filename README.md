@@ -1,5 +1,11 @@
 # QR-Stamp
 
+[![Deploy to GitHub Pages](https://github.com/DictaDank/qr-stamp/actions/workflows/deploy.yml/badge.svg)](https://github.com/DictaDank/qr-stamp/actions/workflows/deploy.yml)
+[![Live Demo](https://img.shields.io/badge/Live-GitHub%20Pages-gold.svg)](https://dictadank.github.io/qr-stamp/)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)](#)
+[![Tests](https://img.shields.io/badge/Tests-349%20Passing-emerald.svg)](#)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](#)
+
 A powerful PDF stamping application that runs 100% in your browser. Add signatures, logos, QR codes, and text stamps to PDFs with complete privacy—all processing happens locally on your device.
 
 **Features:**
