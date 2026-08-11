@@ -3,6 +3,16 @@ import { PDFDocument } from 'pdf-lib';
 import QRCode from 'qrcode';
 import './style.css';
 
+// === SECURITY CONFIGURATION ===
+const SECURITY_CONFIG = {
+  MAX_PDF_SIZE: 50 * 1024 * 1024, // 50 MB
+  MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5 MB
+  MAX_PAGES: 10000,
+  PDF_MAGIC_BYTES: [0x25, 0x50, 0x44, 0x46], // %PDF
+  PROCESS_DEBOUNCE_MS: 2000,
+  MAX_QR_LENGTH: 2953 // QR code spec max
+};
+
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -40,7 +50,6 @@ const stampPagesInput = document.getElementById('stamp-pages-input');
 
 const pdfMetaName = document.getElementById('pdf-meta-name');
 const pdfPreviewCanvas = document.getElementById('pdf-preview-canvas');
-const canvasWrapper = document.getElementById('canvas-wrapper');
 const stampOverlay = document.getElementById('stamp-overlay');
 const stampOverlayContent = document.getElementById('stamp-overlay-content');
 
@@ -73,6 +82,58 @@ let startY = 0;
 let stampLeft = 0;
 let stampTop = 0;
 
+// Rate limiting for process button
+let lastProcessTime = 0;
+let isProcessing = false;
+
+// === SECURITY FUNCTIONS ===
+
+function validatePdfMagicBytes(buffer) {
+  if (buffer.byteLength < 4) return false;
+  const view = new Uint8Array(buffer, 0, 4);
+  return view[0] === SECURITY_CONFIG.PDF_MAGIC_BYTES[0] &&
+         view[1] === SECURITY_CONFIG.PDF_MAGIC_BYTES[1] &&
+         view[2] === SECURITY_CONFIG.PDF_MAGIC_BYTES[2] &&
+         view[3] === SECURITY_CONFIG.PDF_MAGIC_BYTES[3];
+}
+
+function validateFileSize(file, maxSize) {
+  if (file.size > maxSize) {
+    const sizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+    throw new Error(`Archivo demasiado grande. Máximo: ${sizeMB}MB`);
+  }
+}
+
+function validateDataUrl(dataUrl) {
+  if (!dataUrl.startsWith('data:image/')) {
+    throw new Error('Data URL inválida: debe ser una imagen');
+  }
+  const validMimes = ['data:image/png;base64,', 'data:image/jpeg;base64,', 'data:image/jpg;base64,'];
+  return validMimes.some(mime => dataUrl.startsWith(mime));
+}
+
+function sanitizeFilename(filename) {
+  return filename
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .substring(0, 255);
+}
+
+function validatePageCount(count) {
+  if (count > SECURITY_CONFIG.MAX_PAGES) {
+    throw new Error(`Documento muy grande: máximo ${SECURITY_CONFIG.MAX_PAGES} páginas`);
+  }
+}
+
+function validateQrInput(text) {
+  if (text.length > SECURITY_CONFIG.MAX_QR_LENGTH) {
+    throw new Error(`Contenido QR demasiado largo: máximo ${SECURITY_CONFIG.MAX_QR_LENGTH} caracteres`);
+  }
+}
+
+function sanitizeHtmlContent(element, text) {
+  element.textContent = text;
+}
+
 // Initialize QR code on load
 initDefaultQR();
 
@@ -81,6 +142,7 @@ initDefaultQR();
 async function initDefaultQR() {
   try {
     const defaultText = qrTextInput.value || 'https://example.com';
+    validateQrInput(defaultText);
     const qrDataUrl = await QRCode.toDataURL(defaultText, {
       margin: 1,
       width: 300,
@@ -89,13 +151,21 @@ async function initDefaultQR() {
         light: '#ffffff'
       }
     });
+    if (!validateDataUrl(qrDataUrl)) {
+      throw new Error('QR inválido generado');
+    }
     stampImageSrc = qrDataUrl;
     aspectRatio = 1.0;
-    
-    // Set preview
-    stampOverlayContent.innerHTML = `<img src="${stampImageSrc}" class="stamp-overlay-img" alt="Sello Preview" />`;
+
+    const img = document.createElement('img');
+    img.src = stampImageSrc;
+    img.className = 'stamp-overlay-img';
+    img.alt = 'Sello Preview';
+    stampOverlayContent.innerHTML = '';
+    stampOverlayContent.appendChild(img);
   } catch (err) {
-    console.error('Error generating default QR:', err);
+    console.error('Error generating default QR');
+    showToast('Error al generar código QR.', 'error');
   }
 }
 
@@ -140,39 +210,47 @@ pdfFileInput.addEventListener('change', (e) => {
 
 // Load PDF Document
 async function handlePdfFile(file) {
-  pdfFileName = file.name;
-  pdfMetaName.textContent = file.name;
-  
-  showToast('Cargando PDF...', 'success');
-  
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      pdfBytes = e.target.result;
-      
-      // Load with PDF.js for preview
-      const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
-      pdfDoc = await loadingTask.promise;
-      totalPages = pdfDoc.numPages;
-      currentPage = 1;
-      
-      // Show workspace, hide upload
-      stepUpload.classList.add('hidden');
-      stepWorkspace.classList.remove('hidden');
-      
-      // Render first page
-      await renderPreviewPage(currentPage);
-      
-      // Apply default bottom-right layout
-      applyPreset('bottom-right');
-      
-      showToast('Documento cargado correctamente.', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Error al procesar el archivo PDF.', 'error');
-    }
-  };
-  reader.readAsArrayBuffer(file);
+  try {
+    validateFileSize(file, SECURITY_CONFIG.MAX_PDF_SIZE);
+
+    pdfFileName = sanitizeFilename(file.name);
+    sanitizeHtmlContent(pdfMetaName, pdfFileName);
+
+    showToast('Cargando PDF...', 'success');
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        pdfBytes = e.target.result;
+
+        if (!validatePdfMagicBytes(pdfBytes)) {
+          throw new Error('Archivo inválido: no es un PDF válido');
+        }
+
+        const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
+        pdfDoc = await loadingTask.promise;
+        validatePageCount(pdfDoc.numPages);
+        totalPages = pdfDoc.numPages;
+        currentPage = 1;
+
+        stepUpload.classList.add('hidden');
+        stepWorkspace.classList.remove('hidden');
+
+        await renderPreviewPage(currentPage);
+        applyPreset('bottom-right');
+
+        showToast('Documento cargado correctamente.', 'success');
+      } catch (err) {
+        console.error('PDF load error');
+        showToast('Error al procesar el archivo PDF.', 'error');
+        pdfBytes = null;
+        pdfDoc = null;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 // --- Render PDF Page ---
@@ -264,21 +342,44 @@ tabQrBtn.addEventListener('click', () => {
 stampImageInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  
-  stampUploadLabel.textContent = file.name;
-  
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const img = new Image();
-    img.onload = () => {
-      aspectRatio = img.naturalWidth / img.naturalHeight;
-      stampImageSrc = event.target.result;
-      stampOverlayContent.innerHTML = `<img src="${stampImageSrc}" class="stamp-overlay-img" alt="Sello Imagen" />`;
-      updateStampSizeAndPosition();
+
+  try {
+    validateFileSize(file, SECURITY_CONFIG.MAX_IMAGE_SIZE);
+    sanitizeHtmlContent(stampUploadLabel, file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const dataUrl = event.target.result;
+        if (!validateDataUrl(dataUrl)) {
+          throw new Error('Formato de imagen inválido');
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          aspectRatio = img.naturalWidth / img.naturalHeight;
+          stampImageSrc = dataUrl;
+
+          const imgEl = document.createElement('img');
+          imgEl.src = stampImageSrc;
+          imgEl.className = 'stamp-overlay-img';
+          imgEl.alt = 'Sello Imagen';
+          stampOverlayContent.innerHTML = '';
+          stampOverlayContent.appendChild(imgEl);
+          updateStampSizeAndPosition();
+        };
+        img.onerror = () => {
+          showToast('Error al cargar la imagen', 'error');
+        };
+        img.src = dataUrl;
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     };
-    img.src = event.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 });
 
 // Generate QR Code dynamically
@@ -291,8 +392,9 @@ qrTextInput.addEventListener('input', () => {
 async function generateQRFromInput() {
   const text = qrTextInput.value.trim();
   if (!text) return;
-  
+
   try {
+    validateQrInput(text);
     const qrDataUrl = await QRCode.toDataURL(text, {
       margin: 1,
       width: 300,
@@ -301,12 +403,22 @@ async function generateQRFromInput() {
         light: '#ffffff'
       }
     });
+    if (!validateDataUrl(qrDataUrl)) {
+      throw new Error('QR inválido');
+    }
     stampImageSrc = qrDataUrl;
     aspectRatio = 1.0;
-    stampOverlayContent.innerHTML = `<img src="${stampImageSrc}" class="stamp-overlay-img" alt="QR Preview" />`;
+
+    const img = document.createElement('img');
+    img.src = stampImageSrc;
+    img.className = 'stamp-overlay-img';
+    img.alt = 'QR Preview';
+    stampOverlayContent.innerHTML = '';
+    stampOverlayContent.appendChild(img);
     updateStampSizeAndPosition();
   } catch (err) {
-    console.error('Error generating QR:', err);
+    console.error('QR generation error');
+    showToast('Error al generar código QR', 'error');
   }
 }
 
@@ -430,7 +542,7 @@ window.addEventListener('resize', () => {
 // --- Presets ---
 
 presetButtons.forEach(btn => {
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', () => {
     presetButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     applyPreset(btn.dataset.position);
@@ -493,69 +605,65 @@ cancelBtn.addEventListener('click', () => {
 // --- PDF Stamping Core (pdf-lib) ---
 
 processBtn.addEventListener('click', async () => {
+  // Rate limiting (Mejora 10)
+  const now = Date.now();
+  if (isProcessing || (now - lastProcessTime) < SECURITY_CONFIG.PROCESS_DEBOUNCE_MS) {
+    showToast('Por favor espera antes de procesar otro documento.', 'error');
+    return;
+  }
+
   if (!pdfBytes) return;
-  
+
   if (stampType === 'image' && !stampImageSrc.startsWith('data:image')) {
     showToast('Sube una imagen de firma o selecciona Código QR primero.', 'error');
     return;
   }
-  
-  // Set processing state
+
+  isProcessing = true;
+  lastProcessTime = now;
   processBtn.disabled = true;
   processSpinner.classList.remove('hidden');
   processBtnText.textContent = 'Procesando...';
-  
+
   try {
-    // 1. Get page indices to stamp
     const pageIndices = parseTargetPages();
     if (pageIndices.length === 0) {
       showToast('Las páginas especificadas no corresponden al PDF cargado.', 'error');
-      processBtn.disabled = false;
-      processSpinner.classList.add('hidden');
-      processBtnText.textContent = 'Generar y Descargar';
       return;
     }
-    
-    // 2. Load PDF into pdf-lib
+
     const pdfLibDoc = await PDFDocument.load(pdfBytes);
-    
-    // 3. Embed image
+
     let embeddedImg;
     if (stampImageSrc.startsWith('data:image/png;base64,')) {
       embeddedImg = await pdfLibDoc.embedPng(stampImageSrc);
     } else if (stampImageSrc.startsWith('data:image/jpeg;base64,') || stampImageSrc.startsWith('data:image/jpg;base64,')) {
       embeddedImg = await pdfLibDoc.embedJpg(stampImageSrc);
     } else {
-      // Fallback for custom QR codes or formats (QR Code library generates PNG base64 URL)
       embeddedImg = await pdfLibDoc.embedPng(stampImageSrc);
     }
-    
+
     const scaleFactor = parseInt(stampScaleSlider.value, 10) / 100;
     const opacityFactor = parseInt(stampOpacitySlider.value, 10) / 100;
-    
-    // 4. Draw on each target page
+
     const libPages = pdfLibDoc.getPages();
-    
+
     for (const pageIdx of pageIndices) {
       const page = libPages[pageIdx];
       const { width: pageWidth, height: pageHeight } = page.getSize();
-      
-      // Calculate stamp size in actual PDF points
-      // In preview, 100% scale maps to a 120px base width
-      // Scale is proportioned relative to the canvas size
+
       const canvasWidth = pdfPreviewCanvas.width;
       const canvasHeight = pdfPreviewCanvas.height;
-      
+
       const stampWidthInCanvas = 120 * scaleFactor;
       const stampHeightInCanvas = stampWidthInCanvas / aspectRatio;
-      
+
       const pdfStampWidth = (stampWidthInCanvas / canvasWidth) * pageWidth;
       const pdfStampHeight = (stampHeightInCanvas / canvasHeight) * pageHeight;
-      
-      // Calculate coordinates in PDF points (Origin is bottom-left)
+
       const pdfX = xRatio * pageWidth;
       const pdfY = (1 - yRatio - (stampHeightInCanvas / canvasHeight)) * pageHeight;
-      
+
       page.drawImage(embeddedImg, {
         x: pdfX,
         y: pdfY,
@@ -565,16 +673,14 @@ processBtn.addEventListener('click', async () => {
         degrees: -stampRotation
       });
     }
-    
-    // 5. Save and trigger download
+
     const modifiedPdfBytes = await pdfLibDoc.save();
-    
+
     const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
     const dotIdx = pdfFileName.lastIndexOf('.');
     const nameWithoutExt = dotIdx !== -1 ? pdfFileName.substring(0, dotIdx) : pdfFileName;
-    const filename = `${nameWithoutExt}_sellado.pdf`;
-    
-    // Attempt modern File System Access API first for desktop security/sandbox support
+    const filename = sanitizeFilename(`${nameWithoutExt}_sellado.pdf`);
+
     if ('showSaveFilePicker' in window) {
       try {
         const handle = await window.showSaveFilePicker({
@@ -590,30 +696,28 @@ processBtn.addEventListener('click', async () => {
         showToast('PDF guardado con éxito.', 'success');
         return;
       } catch (err) {
-        // If user cancelled, abort download flow
         if (err.name === 'AbortError') {
           showToast('Guardado cancelado.', 'error');
           return;
         }
-        console.warn('showSaveFilePicker error, falling back to anchor download:', err);
       }
     }
-    
-    // Fallback: standard anchor tag download
+
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = filename;
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(downloadUrl);
     showToast('PDF generado y descargado con éxito.', 'success');
   } catch (err) {
-    console.error('Error stamping PDF:', err);
+    console.error('PDF stamping error');
     showToast('Hubo un error al estampar el PDF.', 'error');
   } finally {
+    isProcessing = false;
     processBtn.disabled = false;
     processSpinner.classList.add('hidden');
     processBtnText.textContent = 'Generar y Descargar';
@@ -623,7 +727,7 @@ processBtn.addEventListener('click', async () => {
 // Helper: Parse target page indices
 function parseTargetPages() {
   const selection = stampPagesSelect.value;
-  
+
   if (selection === 'first') {
     return [0];
   }
@@ -633,28 +737,29 @@ function parseTargetPages() {
   if (selection === 'all') {
     return Array.from({ length: totalPages }, (_, i) => i);
   }
-  
-  // Custom parsing
+
   const rangeStr = stampPagesInput.value.trim();
-  if (!rangeStr) return [0]; // default to first page
-  
+  if (!rangeStr) return [0];
+
   const pages = new Set();
   const parts = rangeStr.split(',');
-  
+
   for (let part of parts) {
     part = part.trim();
     if (!part) continue;
-    
+
     if (part.includes('-')) {
       const [startStr, endStr] = part.split('-');
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
-      
-      if (!isNaN(start) && !isNaN(end)) {
+
+      if (!isNaN(start) && !isNaN(end) && start > 0 && end > 0) {
         const min = Math.max(1, Math.min(start, end));
         const max = Math.min(totalPages, Math.max(start, end));
-        for (let i = min; i <= max; i++) {
-          pages.add(i - 1);
+        if (min <= max) {
+          for (let i = min; i <= max; i++) {
+            pages.add(i - 1);
+          }
         }
       }
     } else {
@@ -664,7 +769,11 @@ function parseTargetPages() {
       }
     }
   }
-  
+
+  if (pages.size > SECURITY_CONFIG.MAX_PAGES) {
+    throw new Error(`Demasiadas páginas seleccionadas: máximo ${SECURITY_CONFIG.MAX_PAGES}`);
+  }
+
   return Array.from(pages).sort((a, b) => a - b);
 }
 
@@ -705,7 +814,8 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-// --- Local testing hook: auto-load sample PDF if ?test=true is in URL ---
+// --- Testing hook: auto-load sample PDF if ?test=true is in URL ---
+// This is for local development only. All processing happens client-side.
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has('test')) {
   fetch('/sample.pdf')
@@ -714,25 +824,28 @@ if (urlParams.has('test')) {
       return res.arrayBuffer();
     })
     .then(buffer => {
+      if (!validatePdfMagicBytes(buffer)) {
+        throw new Error('Invalid PDF format');
+      }
       pdfBytes = buffer;
-      pdfFileName = 'sample.pdf';
-      pdfMetaName.textContent = pdfFileName;
+      pdfFileName = sanitizeFilename('sample.pdf');
+      sanitizeHtmlContent(pdfMetaName, pdfFileName);
       return pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
     })
     .then(doc => {
+      validatePageCount(doc.numPages);
       pdfDoc = doc;
       totalPages = pdfDoc.numPages;
       currentPage = 1;
-      
+
       stepUpload.classList.add('hidden');
       stepWorkspace.classList.remove('hidden');
-      
+
       renderPreviewPage(1);
       applyPreset('bottom-right');
       showToast('PDF de prueba cargado automáticamente.', 'success');
     })
-    .catch(err => {
-      console.error('Error loading test PDF:', err);
+    .catch(() => {
       showToast('Error al auto-cargar el PDF de prueba.', 'error');
     });
 }
