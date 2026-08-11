@@ -82,6 +82,24 @@
               <label class="form-label" for="qr-text-input">Contenido del QR (URL o Texto)</label>
               <input type="text" id="qr-text-input" class="text-input" placeholder="https://example.com/verificar" value="https://example.com" />
             </div>
+            <!-- Custom QR settings -->
+            <div class="form-group">
+              <label class="form-label">Personalizar QR</label>
+              <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.25rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem; flex: 1;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Color QR</span>
+                  <input type="color" id="qr-color-dark" value="#000000" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 8px; background: none; cursor: pointer;" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem; flex: 1;" id="qr-bg-color-wrapper">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Color Fondo</span>
+                  <input type="color" id="qr-color-light" value="#ffffff" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 8px; background: none; cursor: pointer;" />
+                </div>
+              </div>
+            </div>
+            <div class="form-group" style="flex-direction: row; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
+              <input type="checkbox" id="qr-transparent-bg" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
+              <label class="form-label" for="qr-transparent-bg" style="margin: 0; cursor: pointer; user-select: none;">Fondo Transparente</label>
+            </div>
           </div>
 
           <!-- Size / Scale Slider -->

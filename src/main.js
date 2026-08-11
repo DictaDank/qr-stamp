@@ -59,6 +59,10 @@ const tabQr = document.getElementById('tab-qr');
 const stampImageInput = document.getElementById('stamp-image-input');
 const stampUploadLabel = document.getElementById('stamp-upload-label');
 const qrTextInput = document.getElementById('qr-text-input');
+const qrColorDarkInput = document.getElementById('qr-color-dark');
+const qrColorLightInput = document.getElementById('qr-color-light');
+const qrTransparentBgInput = document.getElementById('qr-transparent-bg');
+const qrBgColorWrapper = document.getElementById('qr-bg-color-wrapper');
 const stampScaleSlider = document.getElementById('stamp-scale');
 const stampScaleVal = document.getElementById('stamp-scale-val');
 const stampOpacitySlider = document.getElementById('stamp-opacity');
@@ -689,12 +693,14 @@ async function initDefaultQR() {
     trackAction('qr');
     const defaultText = qrTextInput.value || 'https://example.com';
     validateQrInput(defaultText);
+    const darkColor = qrColorDarkInput.value || '#000000';
+    const lightColor = qrTransparentBgInput.checked ? '#00000000' : (qrColorLightInput.value || '#ffffff');
     const qrDataUrl = await QRCode.toDataURL(defaultText, {
       margin: 1,
       width: 300,
       color: {
-        dark: '#000000',
-        light: '#ffffff'
+        dark: darkColor,
+        light: lightColor
       }
     });
     if (!validateDataUrl(qrDataUrl)) {
@@ -972,6 +978,31 @@ qrTextInput.addEventListener('input', () => {
   }
 });
 
+qrColorDarkInput.addEventListener('input', () => {
+  if (stampType === 'qr') {
+    generateQRFromInput();
+  }
+});
+
+qrColorLightInput.addEventListener('input', () => {
+  if (stampType === 'qr') {
+    generateQRFromInput();
+  }
+});
+
+qrTransparentBgInput.addEventListener('change', (e) => {
+  if (e.target.checked) {
+    qrBgColorWrapper.style.opacity = '0.4';
+    qrBgColorWrapper.style.pointerEvents = 'none';
+  } else {
+    qrBgColorWrapper.style.opacity = '1';
+    qrBgColorWrapper.style.pointerEvents = 'auto';
+  }
+  if (stampType === 'qr') {
+    generateQRFromInput();
+  }
+});
+
 async function generateQRFromInput() {
   const text = qrTextInput.value.trim();
   if (!text) return;
@@ -980,12 +1011,14 @@ async function generateQRFromInput() {
     updateActivityTime();
     trackAction('qr');
     validateQrInput(text);
+    const darkColor = qrColorDarkInput.value || '#000000';
+    const lightColor = qrTransparentBgInput.checked ? '#00000000' : (qrColorLightInput.value || '#ffffff');
     const qrDataUrl = await QRCode.toDataURL(text, {
       margin: 1,
       width: 300,
       color: {
-        dark: '#000000',
-        light: '#ffffff'
+        dark: darkColor,
+        light: lightColor
       }
     });
     if (!validateDataUrl(qrDataUrl)) {
