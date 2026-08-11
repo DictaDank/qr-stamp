@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🔐 ¿Por Qué Es Seguro? - QR-Stamp</title>
+    <meta name="description" content="Aprende por qué QR-Stamp es 100% seguro. Procesamiento local, sin servidores, validación exhaustiva." />
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+      :root {
+        --bg-main: #0c0e12;
+        --bg-card: rgba(22, 26, 36, 0.65);
+        --border-color: rgba(197, 168, 128, 0.12);
+        --primary: #c5a880;
+        --primary-glow: rgba(197, 168, 128, 0.2);
+        --text-main: #f5f5f7;
+        --text-muted: #94a3b8;
+        --text-dimmed: #64748b;
+        --success: #10b981;
+        --error: #ef4444;
+        --font-sans: 'Inter', sans-serif;
+        --font-display: 'Outfit', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: var(--bg-main);
+        background-image:
+          radial-gradient(at 0% 0%, rgba(197, 168, 128, 0.07) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(168, 140, 96, 0.05) 0px, transparent 50%),
+          radial-gradient(at 50% 50%, rgba(12, 14, 18, 1) 0px, rgba(7, 8, 10, 1) 100%);
+        color: var(--text-main);
+        font-family: var(--font-sans);
+        line-height: 1.6;
+      }
+
+      header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--border-color);
+        backdrop-filter: blur(12px);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(8, 12, 20, 0.7);
+      }
+
+      .header-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-decoration: none;
+        color: var(--text-main);
+      }
+
+      main {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 3rem 2rem;
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: 3rem;
+      }
+
+      .hero h1 {
+        font-family: var(--font-display);
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        background: linear-gradient(to right, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hero p {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        backdrop-filter: blur(16px);
+      }
+
+      .section h2 {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      .card h3 {
+        margin-bottom: 0.75rem;
+        color: var(--text-main);
+      }
+
+      .card p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+
+      .check {
+        color: var(--success);
+        font-weight: bold;
+        margin-right: 0.5rem;
+      }
+
+      .warning {
+        color: #f59e0b;
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1.5rem;
+      }
+
+      .comparison-table th {
+        background: rgba(197, 168, 128, 0.1);
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 2px solid var(--border-color);
+        font-weight: 600;
+      }
+
+      .comparison-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .comparison-table tr:hover {
+        background: rgba(197, 168, 128, 0.05);
+      }
+
+      .code-block {
+        background: rgba(0, 0, 0, 0.3);
+        border-left: 4px solid var(--primary);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        overflow-x: auto;
+      }
+
+      .faq-item {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .faq-item:last-child {
+        border-bottom: none;
+      }
+
+      .faq-question {
+        font-weight: 600;
+        color: var(--primary);
+        margin-bottom: 0.75rem;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .faq-answer {
+        color: var(--text-muted);
+        line-height: 1.8;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--primary) 0%, #a88c60 100%);
+        color: var(--bg-main);
+        text-decoration: none;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(197, 168, 128, 0.4);
+      }
+
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-dimmed);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--primary);
+        text-decoration: none;
+        margin-bottom: 2rem;
+        transition: all 0.3s;
+      }
+
+      .back-btn:hover {
+        gap: 1rem;
+      }
+
+      .icon {
+        font-size: 1.5rem;
+      }
+
+      .verification-steps {
+        background: rgba(16, 185, 129, 0.05);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .verification-steps h4 {
+        color: var(--success);
+        margin-bottom: 1rem;
+      }
+
+      .step {
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+        position: relative;
+      }
+
+      .step:before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        color: var(--success);
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <a href="/" class="logo">
+          <span>🔐 QR-Stamp Seguridad</span>
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <a href="/" class="back-btn">← Volver a QR-Stamp</a>
+
+      <div class="hero">
+        <h1>🔐 ¿Por Qué QR-Stamp Es Seguro?</h1>
+        <p>Procesamiento 100% local, sin servidores, validación exhaustiva, firma digital legal.</p>
+      </div>
+
+      <!-- CONCEPTO FUNDAMENTAL -->
+      <div class="section">
+        <h2><span class="icon">⚡</span> Concepto Fundamental</h2>
+
+        <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main);">❌ Servicio Web Típico:</h3>
+        <div class="code-block">Tu PDF → Internet → Servidor Remoto → Procesa
+(Riesgo: Tu PDF está en manos de terceros)</div>
+
+        <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main);">✅ QR-Stamp:</h3>
+        <div class="code-block">Tu PDF → Tu Navegador → Procesa Localmente
+(Riesgo: Mínimo - todo en tu PC)</div>
+      </div>
+
+      <!-- PROTECCIONES -->
+      <div class="section">
+        <h2><span class="icon">🛡️</span> Protecciones Multicapa</h2>
+
+        <h3 style="margin-bottom: 1rem; color: var(--text-main);">Cada PDF pasa 8 validaciones:</h3>
+        <div class="code-block">[1] ¿Tamaño válido? (< 50MB)
+[2] ¿Es realmente PDF? (magic bytes)
+[3] ¿Estructura interna válida?
+[4] ¿Tiene JavaScript malicioso?
+[5] ¿Compresión normal? (no Zip bomb)
+[6] ¿Número de páginas normal? (< 10k)
+[7] ¿Metadatos de confianza?
+[8] ✅ ACEPTADO - SEGURO PROCESAR</div>
+
+        <h3 style="margin-bottom: 1rem; color: var(--text-main);">Cada sello pasa 5 validaciones:</h3>
+        <div class="code-block">[1] ¿Tamaño < 5MB?
+[2] ¿Formato PNG/JPEG válido?
+[3] ¿Es realmente imagen?
+[4] ¿Dimensiones normales? (< 5000px)
+[5] ✅ ACEPTADO</div>
+      </div>
+
+      <!-- CARACTERÍSTICAS -->
+      <div class="section">
+        <h2><span class="icon">✨</span> Características de Seguridad</h2>
+
+        <div class="grid">
+          <div class="card">
+            <h3><span class="check">✅</span> 100% Local</h3>
+            <p>Todo el procesamiento ocurre en tu navegador. Tus archivos nunca salen de tu PC.</p>
+          </div>
+          <div class="card">
+            <h3><span class="check">✅</span> Sin Servidor</h3>
+            <p>No hay servidor intermedio. Tu computadora es el único lugar donde se procesan datos.</p>
+          </div>
+          <div class="card">
+            <h3><span class="check">✅</span> Validación Exhaustiva</h3>
+            <p>8 validaciones por PDF, 5 por sello. Rechaza automáticamente archivos sospechosos.</p>
+          </div>
+          <div class="card">
+            <h3><span class="check">✅</span> Timeout Automático</h3>
+            <p>Después de 15 minutos sin actividad, tus datos se limpian automáticamente.</p>
+          </div>
+          <div class="card">
+            <h3><span class="check">✅</span> Auditoría Completa</h3>
+            <p>Todos los eventos se registran. Puedes ver qué pasó con tus documentos.</p>
+          </div>
+          <div class="card">
+            <h3><span class="check">✅</span> Firma Digital Legal</h3>
+            <p>FNMT certificados, válido en España y UE (eIDAS). Imposible falsificar.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPARACIÓN -->
+      <div class="section">
+        <h2><span class="icon">🆚</span> Comparación de Seguridad</h2>
+
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Característica</th>
+              <th>QR-Stamp</th>
+              <th>Google Docs</th>
+              <th>DocuSign</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Datos locales</strong></td>
+              <td><span class="check">✅</span></td>
+              <td>❌</td>
+              <td>❌</td>
+            </tr>
+            <tr>
+              <td><strong>Sin servidor</strong></td>
+              <td><span class="check">✅</span></td>
+              <td>❌</td>
+              <td>❌</td>
+            </tr>
+            <tr>
+              <td><strong>Gratis</strong></td>
+              <td><span class="check">✅</span></td>
+              <td><span class="check">✅</span></td>
+              <td>❌ ($)</td>
+            </tr>
+            <tr>
+              <td><strong>Firma legal</strong></td>
+              <td><span class="check">✅</span></td>
+              <td>❌</td>
+              <td><span class="check">✅</span></td>
+            </tr>
+            <tr>
+              <td><strong>Privacidad</strong></td>
+              <td>⭐⭐⭐⭐⭐</td>
+              <td>⭐⭐⭐</td>
+              <td>⭐⭐⭐⭐</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- VERIFICACIÓN -->
+      <div class="section">
+        <h2><span class="icon">🔍</span> Cómo Verificar Tú Mismo</h2>
+
+        <div class="verification-steps">
+          <h4>Abre DevTools (Presiona F12)</h4>
+
+          <div class="step">
+            <strong>1. Ve a Network:</strong> Carga un PDF y procésalo. Resultado: Cero requests a servidores (solo fuentes). Eso es seguro ✅
+          </div>
+
+          <div class="step">
+            <strong>2. Ve a Console:</strong> Busca errores de "enviando datos". Resultado: No hay (seguro) ✅
+          </div>
+
+          <div class="step">
+            <strong>3. Ve a Storage:</strong> Verifica sessionStorage. Resultado: Solo logs de seguridad (seguro) ✅
+          </div>
+
+          <div class="step">
+            <strong>4. Desconecta Internet:</strong> Carga PDF y procésalo. Resultado: Funciona offline (seguro ✅)
+          </div>
+        </div>
+
+        <p style="color: var(--text-muted); font-style: italic; margin-top: 1rem;">
+          Si el procesamiento requiriera un servidor, ninguno de estos pasos funcionaría. Pero funcionan todos. Eso prueba que es 100% local.
+        </p>
+      </div>
+
+      <!-- FIRMA DIGITAL -->
+      <div class="section">
+        <h2><span class="icon">📝</span> Firma Digital Legal</h2>
+
+        <h3 style="margin-bottom: 1rem; color: var(--text-main);">Cuando firmas con certificado español:</h3>
+        <div class="code-block">Tu Certificado FNMT
+       ↓
+Hash SHA-256 del PDF
+       ↓
+Firma RSA (clave privada)
+       ↓
+Timestamp TSA (FNMT)
+       ↓
+Estructura PKCS#7/XAdES
+       ↓
+✅ VÁLIDO EN ESPAÑA (Código Civil)
+✅ VÁLIDO EN UE (Regulación eIDAS)
+✅ PRUEBA DE NO-REPUDIO
+✅ IMPOSIBLE MODIFICAR SIN DETECTARSE</div>
+      </div>
+
+      <!-- FAQ -->
+      <div class="section">
+        <h2><span class="icon">❓</span> Preguntas Frecuentes</h2>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Dónde se guardan mis archivos?</div>
+          <div class="faq-answer">En tu navegador (memoria RAM), solo mientras los usas. Se limpian automáticamente al cerrar el navegador o después de 15 minutos sin actividad.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Puede QR-Stamp ver mis PDFs?</div>
+          <div class="faq-answer">No. QR-Stamp es código JavaScript que corre en TU navegador. No hay "conexión al servidor" ni "envío de datos". El navegador es el servidor.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Necesito internet?</div>
+          <div class="faq-answer">Solo para cargar QR-Stamp la primera vez. Después puedes trabajar offline. Los PDFs se procesan localmente. La descarga sí necesita navegador activo.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Es legal firmar con FNMT?</div>
+          <div class="faq-answer">Sí, es 100% legal en España y UE. La regulación eIDAS lo respalda. Es válido en juzgados y aceptado por administración pública.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Y si alguien intenta modificar mi PDF firmado?</div>
+          <div class="faq-answer">La firma se rompe automáticamente. Adobe Reader y navegadores muestran advertencia: "This document has been altered or damaged since it was signed".</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Es más seguro que alternativas online?</div>
+          <div class="faq-answer">Sí. No hay terceros intermediarios, no hay almacenamiento en servidor, no hay datos en la nube, tú tienes control total, sin tracking o analytics.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Qué pasa si QR-Stamp tiene un bug?</div>
+          <div class="faq-answer">Solo afecta el PDF actual, no tus datos históricos. Cada sesión es independiente. Recarga la página = nueva sesión limpia. Tu PC no está comprometida.</div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">¿Debo confiar en QR-Stamp?</div>
+          <div class="faq-answer">Puedes verificarlo tú mismo. El código es auditable. Sin servidores remotos. Sin conexiones desconocidas. Usa librerías estándar conocidas.</div>
+        </div>
+      </div>
+
+      <!-- CONCLUSIÓN -->
+      <div class="section">
+        <h2><span class="icon">✅</span> Conclusión</h2>
+
+        <div class="grid">
+          <div class="card">
+            <h3>Tu Control Total</h3>
+            <p>Tus datos = Tu control. Tu navegador = Tu servidor. Tú eres responsable.</p>
+          </div>
+          <div class="card">
+            <h3>Sin Intermediarios</h3>
+            <p>No hay terceros que accedan a tus PDFs. Ningún servidor remoto. Ningún almacenamiento en la nube.</p>
+          </div>
+          <div class="card">
+            <h3>Auditable</h3>
+            <p>Puedes verificar con F12 que no hay conexiones remotas. El código es transparente.</p>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.05); border-left: 4px solid var(--success); border-radius: 8px;">
+          <p style="color: var(--text-main); margin-bottom: 1rem;">
+            <strong>QR-Stamp es seguro porque combina:</strong>
+          </p>
+          <ul style="list-style: none; color: var(--text-muted);">
+            <li><span class="check">✅</span> Arquitectura 100% local (sin servidores)</li>
+            <li><span class="check">✅</span> Validación exhaustiva (8 capas por PDF)</li>
+            <li><span class="check">✅</span> Protección multi-capa (56 mejoras de seguridad)</li>
+            <li><span class="check">✅</span> Auditoría completa (logs de todo)</li>
+            <li><span class="check">✅</span> Firma digital legal (FNMT, eIDAS)</li>
+            <li><span class="check">✅</span> Transparencia total (verificable con F12)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 3rem;">
+        <a href="/" class="btn">← Volver a QR-Stamp</a>
+      </div>
+    </main>
+
+    <footer>
+      <p>&copy; 2026 QR-Stamp. 🔒 100% Seguro. Procesamiento local garantizado.</p>
+      <p style="margin-top: 0.5rem; font-size: 0.75rem;">
+        Verifica la seguridad tú mismo → Presiona F12 y ve a Network, Console y Storage
+      </p>
+    </footer>
+  </body>
+</html>
