@@ -2,6 +2,8 @@
  * Certificate UI Management
  */
 
+import forge from 'node-forge';
+
 import {
   loadCertificateFromFile,
   extractCertificateInfo,
@@ -388,6 +390,3 @@ export function clearSelectedCertificate() {
     signCheckbox.disabled = true;
   }
 }
-
-// Import forge for certificate handling
-import forge from 'node-forge';
