@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown } from 'pdf-lib';
 import QRCode from 'qrcode';
 import { initCertificateUI, signPdfWithSelectedCertificate, clearSelectedCertificate } from './certificate-ui.js';
 import './style.css';
@@ -53,8 +53,11 @@ const processSpinner = document.getElementById('process-spinner');
 
 const tabImageBtn = document.getElementById('tab-image-btn');
 const tabQrBtn = document.getElementById('tab-qr-btn');
+const tabFormBtn = document.getElementById('tab-form-btn');
 const tabImage = document.getElementById('tab-image');
 const tabQr = document.getElementById('tab-qr');
+const tabForm = document.getElementById('tab-form');
+const pdfFormFieldsContainer = document.getElementById('pdf-form-fields-container');
 
 const stampImageInput = document.getElementById('stamp-image-input');
 const stampUploadLabel = document.getElementById('stamp-upload-label');
@@ -87,6 +90,7 @@ const toastContainer = document.getElementById('toast-container');
 
 // State
 let pdfDoc = null;
+let pdfLibDocInstance = null;
 let pdfBytes = null;
 let pdfFileName = '';
 let currentPage = 1;
@@ -814,6 +818,10 @@ async function handlePdfFile(file) {
         totalPages = pdfDoc.numPages;
         currentPage = 1;
 
+        // Load PDF in pdf-lib for form fields and stamping
+        pdfLibDocInstance = await PDFDocument.load(pdfBytes);
+        await loadPdfFormFields();
+
         stepUpload.classList.add('hidden');
         stepWorkspace.classList.remove('hidden');
 
@@ -1222,6 +1230,10 @@ cancelBtn.addEventListener('click', () => {
     // Mejora v1.3.0: Limpiar certificado seleccionado
     clearSelectedCertificate();
 
+    // Limpiar formulario y datos del PDF
+    pdfFormFieldsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-dimmed); text-align: center; display: block; margin-top: 1rem;">Carga un PDF para ver sus campos.</span>';
+    pdfLibDocInstance = null;
+
     stepWorkspace.classList.add('hidden');
     stepUpload.classList.remove('hidden');
 
@@ -1490,11 +1502,15 @@ if (urlParams.has('test')) {
       sanitizeHtmlContent(pdfMetaName, pdfFileName);
       return pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
     })
-    .then(doc => {
+    .then(async doc => {
       validatePageCount(doc.numPages);
       pdfDoc = doc;
       totalPages = pdfDoc.numPages;
       currentPage = 1;
+
+      // Load PDF in pdf-lib for form fields and stamping
+      pdfLibDocInstance = await PDFDocument.load(pdfBytes);
+      await loadPdfFormFields();
 
       stepUpload.classList.add('hidden');
       stepWorkspace.classList.remove('hidden');
@@ -1735,6 +1751,165 @@ function showVerificationResult(result) {
     valAlgo.textContent = '--';
     valTsa.textContent = '--';
     valHash.textContent = '--';
+  }
+}
+
+// --- TABS FORM SELECTOR & FORM FILLING LOGIC ---
+
+// Form tab click listener
+if (tabFormBtn) {
+  tabFormBtn.addEventListener('click', () => {
+    tabFormBtn.classList.add('active');
+    tabImageBtn.classList.remove('active');
+    tabQrBtn.classList.remove('active');
+    tabForm.classList.add('active');
+    tabImage.classList.remove('active');
+    tabQr.classList.remove('active');
+  });
+}
+
+// Load and populate PDF form fields dynamically
+async function loadPdfFormFields() {
+  if (!pdfLibDocInstance) return;
+
+  try {
+    const form = pdfLibDocInstance.getForm();
+    const fields = form.getFields();
+    pdfFormFieldsContainer.innerHTML = '';
+
+    if (fields.length === 0) {
+      pdfFormFieldsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); text-align: center; display: block; margin-top: 1rem;">Este PDF no contiene campos de formulario editables.</span>';
+      return;
+    }
+
+    fields.forEach(field => {
+      const name = field.getName();
+      
+      const fieldGroup = document.createElement('div');
+      fieldGroup.className = 'form-group';
+      fieldGroup.style.marginBottom = '0.75rem';
+
+      const label = document.createElement('label');
+      label.className = 'form-label';
+      label.textContent = name;
+      label.style.fontSize = '0.8rem';
+      label.style.color = 'var(--text-muted)';
+      label.setAttribute('for', `pdf-field-${name}`);
+      
+      let input;
+
+      if (field instanceof PDFTextField) {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'text-input';
+        input.value = field.getText() || '';
+        input.id = `pdf-field-${name}`;
+        
+        input.addEventListener('change', async (e) => {
+          try {
+            updateActivityTime();
+            field.setText(e.target.value);
+            await triggerFormFilledPdfReload();
+          } catch (err) {
+            console.error('Error setting text field value:', err);
+          }
+        });
+      } else if (field instanceof PDFCheckBox) {
+        fieldGroup.style.flexDirection = 'row';
+        fieldGroup.style.alignItems = 'center';
+        fieldGroup.style.gap = '0.5rem';
+        fieldGroup.style.marginTop = '0.5rem';
+
+        input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = field.isChecked();
+        input.id = `pdf-field-${name}`;
+        input.style.width = '16px';
+        input.style.height = '16px';
+        input.style.accentColor = 'var(--primary)';
+        input.style.cursor = 'pointer';
+
+        label.style.margin = '0';
+        label.style.cursor = 'pointer';
+
+        input.addEventListener('change', async (e) => {
+          try {
+            updateActivityTime();
+            if (e.target.checked) {
+              field.check();
+            } else {
+              field.uncheck();
+            }
+            await triggerFormFilledPdfReload();
+          } catch (err) {
+            console.error('Error toggling checkbox value:', err);
+          }
+        });
+      } else if (field instanceof PDFDropdown) {
+        input = document.createElement('select');
+        input.className = 'select-input';
+        input.id = `pdf-field-${name}`;
+
+        const options = field.getOptions();
+        const selected = field.getSelected();
+
+        options.forEach(opt => {
+          const optionEl = document.createElement('option');
+          optionEl.value = opt;
+          optionEl.textContent = opt;
+          if (selected.includes(opt)) {
+            optionEl.selected = true;
+          }
+          input.appendChild(optionEl);
+        });
+
+        input.addEventListener('change', async (e) => {
+          try {
+            updateActivityTime();
+            field.select(e.target.value);
+            await triggerFormFilledPdfReload();
+          } catch (err) {
+            console.error('Error selecting dropdown option:', err);
+          }
+        });
+      }
+
+      if (input) {
+        if (field instanceof PDFCheckBox) {
+          fieldGroup.appendChild(input);
+          fieldGroup.appendChild(label);
+        } else {
+          fieldGroup.appendChild(label);
+          fieldGroup.appendChild(input);
+        }
+        pdfFormFieldsContainer.appendChild(fieldGroup);
+      }
+    });
+  } catch (err) {
+    console.error('Error loading PDF form fields:', err);
+    pdfFormFieldsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--error); text-align: center; display: block; margin-top: 1rem;">Error al leer los campos del formulario.</span>';
+  }
+}
+
+// Reload PDF preview dynamically after form modifications
+async function triggerFormFilledPdfReload() {
+  if (!pdfLibDocInstance) return;
+
+  try {
+    const updatedPdfBytes = await pdfLibDocInstance.save();
+    
+    // Update global pdfBytes to carry changes over to stamping
+    pdfBytes = updatedPdfBytes;
+
+    // Reload document in PDF.js for preview
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
+    pdfDoc = await loadingTask.promise;
+
+    // Re-render current page
+    await renderPreviewPage(currentPage);
+    logSecurityEvent('Form fields updated and preview reloaded', 'info');
+  } catch (err) {
+    console.error('Error re-rendering PDF form filled preview:', err);
   }
 }
 

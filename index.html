@@ -61,10 +61,11 @@
             <span>Configuración</span>
           </div>
 
-          <!-- Tabs for Image vs QR -->
+          <!-- Tabs for Image vs QR vs Form -->
           <div class="tabs">
             <button type="button" id="tab-image-btn" class="tab-btn active">Imagen / Logo</button>
             <button type="button" id="tab-qr-btn" class="tab-btn">Código QR</button>
+            <button type="button" id="tab-form-btn" class="tab-btn">Formulario</button>
           </div>
 
           <!-- Tab Content: Image -->
@@ -103,6 +104,16 @@
             <div class="form-group" style="flex-direction: row; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
               <input type="checkbox" id="qr-transparent-bg" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
               <label class="form-label" for="qr-transparent-bg" style="margin: 0; cursor: pointer; user-select: none;">Fondo Transparente</label>
+            </div>
+          </div>
+
+          <!-- Tab Content: PDF Form Fields -->
+          <div id="tab-form" class="tab-content">
+            <div class="form-group">
+              <label class="form-label">Campos de Formulario PDF</label>
+              <div id="pdf-form-fields-container" style="display: flex; flex-direction: column; gap: 1rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem; margin-top: 0.5rem;">
+                <span style="font-size: 0.85rem; color: var(--text-dimmed); text-align: center; display: block; margin-top: 1rem;">Carga un PDF para ver sus campos.</span>
+              </div>
             </div>
           </div>
 
