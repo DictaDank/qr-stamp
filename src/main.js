@@ -1513,3 +1513,228 @@ if (urlParams.has('test')) {
     });
 }
 
+// --- PORTAL DE VALIDACIÓN DE FIRMAS LOCAL ---
+
+// Elements
+const navStampBtn = document.getElementById('nav-stamp-btn');
+const navVerifyBtn = document.getElementById('nav-verify-btn');
+const stepVerify = document.getElementById('step-verify');
+const verifyDropzone = document.getElementById('verify-dropzone');
+const verifyFileInput = document.getElementById('verify-file-input');
+const verifyResults = document.getElementById('verify-results');
+const verifyStatusBox = document.getElementById('verify-status-box');
+const verifyResetBtn = document.getElementById('verify-reset-btn');
+
+const valSubject = document.getElementById('val-subject');
+const valOrg = document.getElementById('val-org');
+const valCountry = document.getElementById('val-country');
+const valDate = document.getElementById('val-date');
+const valAlgo = document.getElementById('val-algo');
+const valTsa = document.getElementById('val-tsa');
+const valHash = document.getElementById('val-hash');
+
+// Navigation Tabs Switcher
+if (navStampBtn && navVerifyBtn) {
+  navStampBtn.addEventListener('click', () => {
+    navStampBtn.classList.add('active');
+    navVerifyBtn.classList.remove('active');
+    navStampBtn.style.color = 'var(--text-main)';
+    navStampBtn.style.borderBottom = '2px solid var(--primary)';
+    navVerifyBtn.style.color = 'var(--text-muted)';
+    navVerifyBtn.style.borderBottom = 'none';
+
+    stepVerify.classList.add('hidden');
+    if (pdfBytes) {
+      stepWorkspace.classList.remove('hidden');
+    } else {
+      stepUpload.classList.remove('hidden');
+    }
+  });
+
+  navVerifyBtn.addEventListener('click', () => {
+    navVerifyBtn.classList.add('active');
+    navStampBtn.classList.remove('active');
+    navVerifyBtn.style.color = 'var(--text-main)';
+    navVerifyBtn.style.borderBottom = '2px solid var(--primary)';
+    navStampBtn.style.color = 'var(--text-muted)';
+    navStampBtn.style.borderBottom = 'none';
+
+    stepUpload.classList.add('hidden');
+    stepWorkspace.classList.add('hidden');
+    stepVerify.classList.remove('hidden');
+  });
+}
+
+// Dropzone Event Listeners for Verification
+if (verifyDropzone && verifyFileInput) {
+  verifyDropzone.addEventListener('click', () => verifyFileInput.click());
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    verifyDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      verifyDropzone.classList.add('dragover');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    verifyDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      verifyDropzone.classList.remove('dragover');
+    }, false);
+  });
+
+  verifyDropzone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length > 0 && files[0].type === 'application/pdf') {
+      handleVerifyFile(files[0]);
+    } else {
+      showToast('Por favor, selecciona un archivo PDF válido.', 'error');
+    }
+  });
+
+  verifyFileInput.addEventListener('change', (e) => {
+    const files = e.target.files;
+    if (files.length > 0) {
+      handleVerifyFile(files[0]);
+    }
+  });
+}
+
+if (verifyResetBtn) {
+  verifyResetBtn.addEventListener('click', () => {
+    verifyResults.classList.add('hidden');
+    verifyDropzone.classList.remove('hidden');
+    verifyFileInput.value = '';
+  });
+}
+
+// Verification Core Logic
+async function handleVerifyFile(file) {
+  showToast('Analizando firmas criptográficas...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const buffer = e.target.result;
+      const uint8Array = new Uint8Array(buffer);
+
+      // Search byte offset of the signature block in comments
+      const searchStr = '\n%%EOF\n% Signature: ';
+      const encoder = new TextEncoder();
+      const searchBytes = encoder.encode(searchStr);
+
+      let offset = -1;
+      for (let i = 0; i <= uint8Array.length - searchBytes.length; i++) {
+        let match = true;
+        for (let j = 0; j < searchBytes.length; j++) {
+          if (uint8Array[i + j] !== searchBytes[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          offset = i;
+          break;
+        }
+      }
+
+      if (offset === -1) {
+        showVerificationResult({
+          valid: false,
+          message: 'Firma No Encontrada: Este archivo PDF no contiene ninguna firma digital criptográfica de QR-Stamp.'
+        });
+        return;
+      }
+
+      // Extract metadata JSON from signature block
+      const metadataBytes = uint8Array.slice(offset + searchBytes.length);
+      const decoder = new TextDecoder();
+      const metadataStr = decoder.decode(metadataBytes).trim();
+
+      let sigData;
+      try {
+        sigData = JSON.parse(metadataStr);
+      } catch (err) {
+        showVerificationResult({
+          valid: false,
+          message: 'Firma Corrupta: Los metadatos del bloque de firma no pudieron ser procesados.'
+        });
+        return;
+      }
+
+      // Calculate SHA-256 of the original PDF bytes (bytes before signature offset)
+      const originalBytes = uint8Array.slice(0, offset);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', originalBytes);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const computedHashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const expectedHashHex = sigData.metadata.pdfHash;
+      const integrityValid = (computedHashHex === expectedHashHex);
+
+      if (integrityValid) {
+        showVerificationResult({
+          valid: true,
+          message: 'Firma Válida e Intacta: El documento no ha sufrido ninguna modificación desde que fue firmado digitalmente.',
+          metadata: sigData
+        });
+      } else {
+        showVerificationResult({
+          valid: false,
+          message: 'Firma Inválida / Modificada: El archivo ha sido manipulado o modificado después de realizar el estampado.',
+          metadata: sigData
+        });
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
+      showToast('Error al verificar la firma del archivo.', 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showVerificationResult(result) {
+  verifyDropzone.classList.add('hidden');
+  verifyResults.classList.remove('hidden');
+
+  if (result.valid) {
+    verifyStatusBox.style.background = 'rgba(16, 185, 129, 0.1)';
+    verifyStatusBox.style.border = '1px solid rgba(16, 185, 129, 0.2)';
+    verifyStatusBox.style.color = 'var(--success)';
+    verifyStatusBox.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 24px; height: 24px; color: var(--success);">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+      </svg>
+      <span>${result.message}</span>
+    `;
+  } else {
+    verifyStatusBox.style.background = 'rgba(239, 68, 68, 0.1)';
+    verifyStatusBox.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+    verifyStatusBox.style.color = 'var(--error)';
+    verifyStatusBox.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 24px; height: 24px; color: var(--error);">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286Zm0 13.036h.008v.008H12v-.008Z" />
+      </svg>
+      <span>${result.message}</span>
+    `;
+  }
+
+  if (result.metadata) {
+    valSubject.textContent = result.metadata.metadata.signedBy || 'Desconocido';
+    valOrg.textContent = result.metadata.metadata.organization || 'No especificada';
+    valCountry.textContent = result.metadata.metadata.country || 'No especificado';
+    valDate.textContent = new Date(result.metadata.metadata.signedAt).toLocaleString('es-ES') || '--';
+    valAlgo.textContent = result.metadata.signatureAlgorithm || 'SHA-256-RSA';
+    valTsa.textContent = result.metadata.hasTimestamp ? 'Verificada (FNMT TSA)' : 'Sin marca de tiempo';
+    valHash.textContent = result.metadata.metadata.pdfHash || '--';
+  } else {
+    valSubject.textContent = '--';
+    valOrg.textContent = '--';
+    valCountry.textContent = '--';
+    valDate.textContent = '--';
+    valAlgo.textContent = '--';
+    valTsa.textContent = '--';
+    valHash.textContent = '--';
+  }
+}
+
