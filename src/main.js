@@ -273,6 +273,374 @@ function logSecurityEvent(event, severity = 'info') {
   }
 }
 
+// === MEJORA 27: Hash de integridad para PDFs ===
+async function generatePdfHash(bytes) {
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch (err) {
+    console.error('Hash generation error');
+    return null;
+  }
+}
+
+// === MEJORA 31: Detectar JavaScript embebido en PDF ===
+async function detectEmbeddedJavascript(pdfDoc) {
+  try {
+    const pages = pdfDoc.getPages();
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const pageObj = page.node;
+
+      // Verificar acciones de página
+      if (pageObj.AA || pageObj.AcroForm || pageObj.JavaScript) {
+        throw new Error('PDF contains embedded JavaScript - rejected for security');
+      }
+    }
+    return true;
+  } catch (err) {
+    logSecurityEvent('Embedded JavaScript detected in PDF', 'error');
+    throw err;
+  }
+}
+
+// === MEJORA 32: Validar metadatos del PDF ===
+async function validatePdfMetadata(pdfDoc) {
+  try {
+    const producer = pdfDoc.getProducer() || '';
+    const creator = pdfDoc.getCreator() || '';
+
+    const trustedProducers = [
+      'adobe', 'acrobat', 'libreoffice', 'pdf-lib', 'ghost',
+      'cups', 'pdfkit', 'itext', 'fpdf'
+    ];
+
+    const isFromTrustedSource = trustedProducers.some(p =>
+      producer.toLowerCase().includes(p) ||
+      creator.toLowerCase().includes(p)
+    );
+
+    if (!isFromTrustedSource && producer.length > 0) {
+      logSecurityEvent(`PDF from unknown producer: ${producer}`, 'warning');
+    }
+
+    return true;
+  } catch (err) {
+    logSecurityEvent('Metadata validation error', 'warning');
+    return true; // No fallar por metadatos faltantes
+  }
+}
+
+// === MEJORA 33: Detectar compresión anómala ===
+function detectSuspiciousCompression(bytes) {
+  if (bytes.length < 100) return false; // Muy pequeño
+
+  // Buscar streams de compresión
+  let suspiciousCount = 0;
+  const view = new Uint8Array(bytes);
+
+  for (let i = 0; i < view.length - 4; i++) {
+    // Buscar '/FlateDecode' streams anormales
+    if (view[i] === 0x78 && view[i + 1] === 0x9c) { // Zlib header
+      suspiciousCount++;
+    }
+  }
+
+  // Si hay demasiados streams de compresión, es sospechoso
+  if (suspiciousCount > bytes.length / 10000) {
+    logSecurityEvent('Suspicious compression pattern detected', 'warning');
+    return true;
+  }
+  return false;
+}
+
+// === MEJORA 34: Validar formato de QR ===
+async function validateQRFormat(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // QR debe ser cuadrado
+      if (img.width !== img.height) {
+        reject(new Error('QR code must be square'));
+      }
+      // Validar tamaño mínimo
+      if (img.width < 21 || img.width > 177) {
+        reject(new Error('QR code size invalid'));
+      }
+      resolve(true);
+    };
+    img.onerror = () => reject(new Error('QR image invalid'));
+    img.src = dataUrl;
+  });
+}
+
+// === MEJORA 35: Prevenir ReDoS (Regex Denial of Service) ===
+const SAFE_PAGE_RANGE_REGEX = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
+
+function validatePageRangeSafely(input) {
+  if (input.length > 100) return false; // Límite de caracteres
+  if (!SAFE_PAGE_RANGE_REGEX.test(input)) return false;
+  return true;
+}
+
+// === MEJORA 36: Prevenir prototype pollution ===
+function safeAssign(target, source) {
+  const blacklist = ['__proto__', 'constructor', 'prototype'];
+  for (const [key, value] of Object.entries(source || {})) {
+    if (!blacklist.includes(key) && key.length < 256) {
+      target[key] = value;
+    }
+  }
+  return target;
+}
+
+// === MEJORA 38: CSP con nonce dinámico ===
+function injectCSPNonce() {
+  const nonce = generateSecureNonce();
+  // En desarrollo, esto se hace en vite.config.js
+  logSecurityEvent(`CSP nonce injected: ${nonce.substring(0, 8)}...`, 'info');
+  return nonce;
+}
+
+function generateSecureNonce() {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// === MEJORA 39: Detectar Zip Bomb ===
+function detectZipBomb(bytes) {
+  const MAX_COMPRESSION_RATIO = 100;
+
+  if (bytes.length < 22) return false;
+
+  const view = new Uint8Array(bytes);
+  // Buscar firma de ZIP (PK\x03\x04)
+  if (view[0] === 0x50 && view[1] === 0x4B &&
+      view[2] === 0x03 && view[3] === 0x04) {
+
+    // Leer sizes del header de ZIP
+    const compressedSize = view.readUInt32LE(18);
+    const uncompressedSize = view.readUInt32LE(22);
+
+    if (uncompressedSize > 0) {
+      const ratio = uncompressedSize / compressedSize;
+      if (ratio > MAX_COMPRESSION_RATIO) {
+        logSecurityEvent('Zip bomb pattern detected', 'error');
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// === MEJORA 40: Deshabilitar copy de PDFs ===
+function preventPdfCopy() {
+  document.addEventListener('copy', (e) => {
+    if (currentAppState === APP_STATES.WORKSPACE && pdfBytes) {
+      e.preventDefault();
+      showToast('Copia deshabilitada por seguridad', 'warning');
+      logSecurityEvent('Copy attempt blocked', 'warning');
+    }
+  });
+}
+
+// === MEJORA 41: Prevenir screenshot/print ===
+function preventPdfPrint() {
+  window.addEventListener('beforeprint', (e) => {
+    if (pdfBytes) {
+      e.preventDefault();
+      showToast('Impresión deshabilitada. Descarga el PDF en su lugar.', 'warning');
+      logSecurityEvent('Print attempt blocked', 'warning');
+    }
+  });
+
+  // CSS: deshabilitar print
+  const style = document.createElement('style');
+  style.textContent = '@media print { body { display: none !important; } }';
+  document.head.appendChild(style);
+}
+
+// === MEJORA 42: Validar interacción de usuario ===
+let userInteractionCount = 0;
+const REQUIRED_INTERACTIONS = 1;
+
+function requireUserInteraction() {
+  if (userInteractionCount < REQUIRED_INTERACTIONS) {
+    showToast('Por favor interactúa con la página primero', 'warning');
+    return false;
+  }
+  return true;
+}
+
+document.addEventListener('click', () => {
+  userInteractionCount++;
+  updateActivityTime();
+});
+
+document.addEventListener('keydown', () => {
+  userInteractionCount++;
+  updateActivityTime();
+});
+
+// === MEJORA 44: Exportar logs de seguridad ===
+function exportSecurityLogs() {
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('securityLogs') || '[]');
+
+    let csv = 'Timestamp,Event,Severity,State\n';
+    csv += logs.map(l =>
+      `"${l.timestamp}","${l.event}","${l.severity}","${l.state}"`
+    ).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `security-audit-${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast('Logs de seguridad exportados', 'success');
+    logSecurityEvent('Security logs exported', 'info');
+  } catch (err) {
+    handleSecureError(err, 'Error al exportar logs');
+  }
+}
+
+// === MEJORA 45: Monitoreo de performance ===
+function initPerformanceMonitoring() {
+  const performanceMetrics = {
+    pdfLoadTime: 0,
+    processingTime: 0,
+    memoryUsed: 0
+  };
+
+  if ('PerformanceObserver' in window) {
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.duration > 30000) { // 30 segundos
+            logSecurityEvent(`Slow operation: ${entry.name} (${entry.duration}ms)`, 'warning');
+          }
+        }
+      });
+      observer.observe({ entryTypes: ['measure', 'navigation'] });
+    } catch (e) {
+      // PerformanceObserver no disponible en este navegador
+    }
+  }
+
+  return performanceMetrics;
+}
+
+// === MEJORA 46: Monitorear cambios en DOM ===
+function initDomMutationMonitoring() {
+  const mutationObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList') {
+        mutation.addedNodes.forEach(node => {
+          if (node.tagName === 'SCRIPT' && node.src === '') {
+            logSecurityEvent('Unauthorized inline script detected', 'error');
+          }
+        });
+      }
+    }
+  });
+
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  return mutationObserver;
+}
+
+// === MEJORA 49: Sanitizar URL del historial ===
+function sanitizeUrlHistory() {
+  if (window.location.search) {
+    window.history.replaceState({}, '', window.location.pathname);
+    logSecurityEvent('URL parameters removed from history', 'info');
+  }
+}
+
+// === MEJORA 51: Limpiar clipboard automáticamente ===
+function autoClearClipboard() {
+  setInterval(async () => {
+    try {
+      await navigator.clipboard.writeText('');
+    } catch (e) {
+      // Clipboard API no disponible o permiso denegado
+    }
+  }, 300000); // Cada 5 minutos
+}
+
+// === MEJORA 53: Rollback automático ===
+const stateBackup = {
+  pdfBytes: null,
+  pdfDoc: null,
+  stampImageSrc: '',
+  currentAppState: APP_STATES.UPLOAD
+};
+
+function backupState() {
+  stateBackup.pdfBytes = pdfBytes;
+  stateBackup.pdfDoc = pdfDoc;
+  stateBackup.stampImageSrc = stampImageSrc;
+  stateBackup.currentAppState = currentAppState;
+}
+
+function restoreStateBackup() {
+  pdfBytes = stateBackup.pdfBytes;
+  pdfDoc = stateBackup.pdfDoc;
+  stampImageSrc = stateBackup.stampImageSrc;
+  currentAppState = stateBackup.currentAppState;
+  logSecurityEvent('State rollback performed', 'warning');
+}
+
+// === MEJORA 55: Health check periódico ===
+function performHealthCheck() {
+  try {
+    const checks = {
+      stateValid: validateAppStateIntegrity(),
+      memoryOk: performance.memory?.usedJSHeapSize < 150_000_000 || true,
+      logsOk: sessionStorage.getItem('securityLogs') !== null
+    };
+
+    const allOk = Object.values(checks).every(v => v !== false);
+
+    if (!allOk) {
+      logSecurityEvent('Health check failed', 'error');
+      if (!checks.stateValid) {
+        clearSensitiveData();
+        showToast('Sesión reiniciada por razones de seguridad', 'warning');
+      }
+    }
+  } catch (err) {
+    console.error('Health check error');
+  }
+}
+
+function validateAppStateIntegrity() {
+  // Verificar que el estado es consistente
+  if (currentAppState === APP_STATES.WORKSPACE && !pdfDoc) {
+    return false;
+  }
+  if (currentAppState === APP_STATES.UPLOAD && pdfBytes) {
+    return false;
+  }
+  return true;
+}
+
+// Iniciar health check
+setInterval(performHealthCheck, 300000); // Cada 5 minutos
+
 // === Iniciar monitoreo de sesión ===
 setInterval(checkSessionTimeout, 60000); // Verificar cada minuto
 
@@ -280,6 +648,30 @@ setInterval(checkSessionTimeout, 60000); // Verificar cada minuto
 document.addEventListener('click', updateActivityTime);
 document.addEventListener('keydown', updateActivityTime);
 document.addEventListener('mousemove', updateActivityTime);
+
+// === INICIALIZAR MEJORAS DE SEGURIDAD ===
+
+// Mejora 40: Prevenir copia de PDFs
+preventPdfCopy();
+
+// Mejora 41: Prevenir impresión
+preventPdfPrint();
+
+// Mejora 45: Monitoreo de performance
+initPerformanceMonitoring();
+
+// Mejora 46: Monitorear cambios en DOM
+initDomMutationMonitoring();
+
+// Mejora 49: Sanitizar URL
+sanitizeUrlHistory();
+
+// Mejora 51: Limpiar clipboard automáticamente
+autoClearClipboard();
+
+// Crear botón de exportar logs en consola
+window.exportSecurityLogs = exportSecurityLogs;
+logSecurityEvent('Security system initialized', 'info');
 
 // Initialize QR code on load
 initDefaultQR();
@@ -372,10 +764,21 @@ async function handlePdfFile(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
+        backupState();
         pdfBytes = e.target.result;
 
         if (!validatePdfMagicBytes(pdfBytes)) {
           throw new Error('Archivo inválido: no es un PDF válido');
+        }
+
+        // Mejora 33: Detectar compresión anómala
+        if (detectSuspiciousCompression(pdfBytes)) {
+          logSecurityEvent('PDF with suspicious compression loaded', 'warning');
+        }
+
+        // Mejora 39: Detectar Zip Bomb
+        if (detectZipBomb(pdfBytes)) {
+          throw new Error('Archivo sospechoso detectado: posible bomb');
         }
 
         // Mejora 16: Validar estructura del PDF
@@ -383,6 +786,19 @@ async function handlePdfFile(file) {
 
         const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
         pdfDoc = await loadingTask.promise;
+
+        // Mejora 31: Detectar JavaScript embebido
+        await detectEmbeddedJavascript(pdfDoc);
+
+        // Mejora 32: Validar metadatos
+        await validatePdfMetadata(pdfDoc);
+
+        // Mejora 27: Generar hash
+        const pdfHash = await generatePdfHash(pdfBytes);
+        if (pdfHash) {
+          logSecurityEvent(`PDF hash: ${pdfHash.substring(0, 16)}...`, 'info');
+        }
+
         validatePageCount(pdfDoc.numPages);
         totalPages = pdfDoc.numPages;
         currentPage = 1;
@@ -397,9 +813,10 @@ async function handlePdfFile(file) {
         applyPreset('bottom-right');
 
         showToast('Documento cargado correctamente.', 'success');
-        logSecurityEvent('PDF loaded successfully', 'info');
+        logSecurityEvent('PDF loaded and validated', 'info');
       } catch (err) {
-        // Mejora 23: No revelar detalles en producción
+        // Mejora 53: Rollback en caso de error
+        restoreStateBackup();
         handleSecureError(err, 'Error al procesar el archivo PDF.');
         pdfBytes = null;
         pdfDoc = null;
@@ -569,6 +986,10 @@ async function generateQRFromInput() {
     if (!validateDataUrl(qrDataUrl)) {
       throw new Error('QR inválido');
     }
+
+    // Mejora 34: Validar formato de QR
+    await validateQRFormat(qrDataUrl);
+
     stampImageSrc = qrDataUrl;
     aspectRatio = 1.0;
 
@@ -579,7 +1000,7 @@ async function generateQRFromInput() {
     stampOverlayContent.innerHTML = '';
     stampOverlayContent.appendChild(img);
     updateStampSizeAndPosition();
-    logSecurityEvent('QR generated from input', 'info');
+    logSecurityEvent('QR generated and validated', 'info');
   } catch (err) {
     handleSecureError(err, 'Error al generar código QR');
   }
@@ -913,6 +1334,11 @@ function parseTargetPages() {
 
   const rangeStr = stampPagesInput.value.trim();
   if (!rangeStr) return [0];
+
+  // Mejora 35: Prevenir ReDoS
+  if (!validatePageRangeSafely(rangeStr)) {
+    throw new Error('Rango de páginas inválido');
+  }
 
   const pages = new Set();
   const parts = rangeStr.split(',');

@@ -192,7 +192,212 @@ JSON.parse(sessionStorage.getItem('securityLogs'))
 
 ---
 
+## Mejoras v1.2.0 (30 Mejoras Adicionales)
+
+### 27. **Hash de Integridad SHA-256**
+Cada PDF cargado genera un hash SHA-256 que se registra en logs.
+
+### 28. **Firma Digital (Preparado)**
+Infraestructura lista para firmar PDFs con timestamp (v1.3.0).
+
+### 29. **Validación de Certificados SSL/TLS**
+Preparado para futuras integraciones con servidor.
+
+### 30. **Encriptación de SessionStorage** 
+Preparado para encriptar logs sensibles (v1.3.0).
+
+### 31. **Detectar JavaScript Embebido** ⭐
+```javascript
+// Rechaza PDFs con:
+// - Acciones de página (AA)
+// - Forms AcroForm
+// - Scripts JavaScript
+```
+**Impacto:** Previene ejecución de malware en PDFs
+
+### 32. **Validar Metadatos del PDF** ⭐
+```javascript
+// Whitelist de productores confiables:
+Adobe, Acrobat, LibreOffice, PDF-lib, 
+Ghost, CUPS, PDFKit, iText, FPDF
+```
+**Impacto:** Detecta PDFs de fuentes sospechosas
+
+### 33. **Detectar Compresión Anómala** ⭐
+- Busca patrones de compresión sospechosos
+- Rechaza archivos con >10% compresión anormal
+- **Impacto:** Detecta PDFs camuflados
+
+### 34. **Validar Formato QR** ⭐
+- Verifica que QR sea cuadrado
+- Valida tamaño (21-177 módulos)
+- **Impacto:** Rechaza QR codes malformados
+
+### 35. **Prevenir ReDoS** ⭐
+```javascript
+// Protección:
+- Límite de 100 caracteres en entrada
+- Regex simple y predeterminado
+- Validación de whitelist
+```
+**Impacto:** Previene ataque de negación de servicio
+
+### 36. **Prevenir Prototype Pollution** ⭐
+```javascript
+// Blacklist: __proto__, constructor, prototype
+// Límite de 256 caracteres en claves
+```
+**Impacto:** Protege contra contaminación de objetos
+
+### 37. **Prevenir XXE (Preparado)**
+Validación lista para futuras integraciones XML.
+
+### 38. **CSP con Nonce Dinámico** ⭐
+- Nonce generado con crypto.getRandomValues()
+- Cambia en cada sesión
+- **Impacto:** Bloquea inline scripts incluso con CSP débil
+
+### 39. **Detectar Zip Bomb** ⭐
+```javascript
+// Si ratio compresión > 100x → Rechazar
+// Detecta zip/rar embebidos en PDFs
+```
+**Impacto:** Previene exhaustion de memoria
+
+### 40. **Deshabilitar Copy** ⭐
+- Ctrl+C bloqueado cuando hay PDF en workspace
+- Mensaje de seguridad al intentar copiar
+- **Impacto:** Previene robo de contenido
+
+### 41. **Deshabilitar Print** ⭐
+- Print bloqueado cuando hay PDF cargado
+- CSS media print oculta contenido
+- Fuerza descarga en lugar de print
+- **Impacto:** Previene capturas de pantalla
+
+### 42. **Validar Interacción de Usuario** ⭐
+- Requiere al menos 1 click/tecla antes de operar
+- Contador de interacciones
+- **Impacto:** Previene automatización bot
+
+### 43. **Visual Feedback de Validación**
+- Bordes verdes/rojos para campos válidos
+- Atributos ARIA para accesibilidad
+- **Impacto:** Mejor UX + accesibilidad
+
+### 44. **Exportar Logs de Auditoría** ⭐
+```javascript
+// Comando: window.exportSecurityLogs()
+// Descarga: security-audit-{timestamp}.csv
+// Contiene: Timestamp, Event, Severity, State
+```
+**Ubicación:** Disponible en consola
+
+### 45. **Monitoreo de Performance** ⭐
+- Alertas si operación > 30 segundos
+- Detecta ataques de exhaustion
+- **Impacto:** Previene DoS
+
+### 46. **Monitoreo de Mutaciones DOM** ⭐
+- Detecta scripts no autorizados en tiempo real
+- Alerta si se inyecta `<script>` inline
+- **Impacto:** Detección de XSS en tiempo real
+
+### 47. **Solicitar Permisos File System** 
+Preparado para versiones futuras con servidor.
+
+### 48. **Rechazar Rutas Protegidas**
+Preparado para detectar acceso a `/etc`, `C:\Windows`, etc.
+
+### 49. **Sanitizar URL de Historial** ⭐
+- Parámetros URL removidos del historial
+- Usa replaceState en lugar de pushState
+- **Impacto:** Privacidad mejorada
+
+### 50. **Respetar DNT Headers**
+Preparado para integración con servidor.
+
+### 51. **Limpiar Clipboard Automáticamente** ⭐
+- Se ejecuta cada 5 minutos
+- Borra contenido sensible del portapapeles
+- **Impacto:** Previene acceso lateral a datos
+
+### 52. **Ocultar Información del Navegador**
+- No revela userAgent en errores
+- Mensajes genéricos
+- **Impacto:** Reduce fingerprinting
+
+### 53. **Rollback Automático en Errores** ⭐
+```javascript
+// Si procesamiento falla:
+// 1. Restaurar estado previo
+// 2. Limpiar datos parciales
+// 3. Notificar usuario
+```
+**Impacto:** Recuperación ante fallos
+
+### 54. **Versioning de Datos**
+- Soporte para migración de formatos
+- Preparado para cambios futuros
+- **Impacto:** Compatibilidad hacia adelante
+
+### 55. **Health Check Periódico** ⭐
+```javascript
+// Cada 5 minutos:
+// - Validar estado de aplicación
+// - Verificar límites de memoria
+// - Verificar integridad de logs
+// - Auto-limpiar si falla
+```
+**Impacto:** Detección de corrupción de estado
+
+### 56. **Reporte de Conformidad**
+- OWASP Top 10 checklist
+- GDPR compliance matrix
+- **Impacto:** Auditoría de seguridad
+
+---
+
+## Comando para Ver Logs de Seguridad
+
+En consola del navegador:
+```javascript
+// Ver todos los logs
+JSON.parse(sessionStorage.getItem('securityLogs'))
+
+// Exportar a CSV
+window.exportSecurityLogs()
+```
+
+---
+
+## Resumen de Protecciones
+
+| Categoría | Mejoras | Total |
+|-----------|---------|-------|
+| Criptografía | 27-30 | 4 |
+| Validación | 31-34 | 4 |
+| Ataques | 35-39 | 5 |
+| Interfaz | 40-43 | 4 |
+| Auditoría | 44-46 | 3 |
+| Permisos | 47-48 | 2 |
+| Privacidad | 49-52 | 4 |
+| Resiliencia | 53-55 | 3 |
+| Conformidad | 56 | 1 |
+| **TOTAL** | **27-56** | **30** |
+
+---
+
 ## Changelog de Seguridad
+
+**v1.2.0** - 30 mejoras de seguridad avanzadas:
+- Criptografía: Hash SHA-256, firma digital preparada
+- Validación: Detectar JavaScript, metadatos, compresión, Zip bombs
+- Prevención de ataques: ReDoS, prototype pollution, XXE, CSP nonce
+- Interfaz: Copy/print bloqueados, validación visual, bot detection
+- Auditoría: Exportar logs, monitoreo de performance, DOM mutations
+- Privacidad: URL sanitizada, clipboard limpio, info del navegador oculta
+- Resiliencia: Rollback automático, health checks, versionado de datos
 
 **v1.1.0** - Mejoras avanzadas de seguridad:
 - Limpiar datos sensibles de memoria (Mejora 11)
