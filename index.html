@@ -232,6 +232,36 @@
             <p style="font-size: 0.7rem; color: var(--text-dimmed); margin: 0;">
               Envía de forma automatizada una copia en formato digital firmado a tu servidor de transportes en cuanto se genere la descarga.
             </p>
+        </div>
+
+        <!-- WhatsApp/SMS Notification Panel -->
+        <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+          <label class="form-label" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
+            <span>Notificación al Cliente</span>
+            <input type="checkbox" id="notify-client-checkbox" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
+          </label>
+          <div id="notify-client-config" class="hidden" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="notify-phone" style="font-size: 0.75rem; color: var(--text-muted);">Teléfono de Destinatario (con +34):</label>
+              <input type="tel" id="notify-phone" class="text-input" placeholder="+34 600 000 000" style="font-size: 0.8rem; padding: 0.4rem 0.6rem; width: 100%;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="notify-method" style="font-size: 0.75rem; color: var(--text-muted);">Canal de Notificación:</label>
+              <select id="notify-method" class="select-input" style="height: 36px; font-size: 0.8rem;">
+                <option value="whatsapp-direct">WhatsApp Directo (wa.me)</option>
+                <option value="webhook">Webhook Automatizado (Make/SMS)</option>
+              </select>
+            </div>
+            <div id="notify-webhook-group" class="hidden">
+              <div class="form-group">
+                <label class="form-label" for="notify-webhook-url" style="font-size: 0.75rem; color: var(--text-muted);">Webhook URL:</label>
+                <input type="text" id="notify-webhook-url" class="text-input" value="https://api.transfont.com/v1/notify" style="font-size: 0.8rem; padding: 0.4rem 0.6rem; width: 100%;" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="notify-message" style="font-size: 0.75rem; color: var(--text-muted);">Plantilla del Mensaje:</label>
+              <textarea id="notify-message" class="text-input" style="font-size: 0.8rem; height: 60px; resize: none; font-family: sans-serif; padding: 0.4rem 0.6rem; width: 100%;">Hola, tu albarán {filename} ha sido sellado y entregado por Transportes Transfont. Puedes verificar la firma digital localmente en: {verify_url}</textarea>
+            </div>
           </div>
         </div>
 

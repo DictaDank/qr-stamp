@@ -81,6 +81,13 @@ const pdfMetaName = document.getElementById('pdf-meta-name');
 const sendCopyCheckbox = document.getElementById('send-copy-checkbox');
 const sendCopyConfig = document.getElementById('send-copy-config');
 const sendCopyUrlInput = document.getElementById('send-copy-url');
+const notifyClientCheckbox = document.getElementById('notify-client-checkbox');
+const notifyClientConfig = document.getElementById('notify-client-config');
+const notifyPhoneInput = document.getElementById('notify-phone');
+const notifyMethodSelect = document.getElementById('notify-method');
+const notifyWebhookGroup = document.getElementById('notify-webhook-group');
+const notifyWebhookUrlInput = document.getElementById('notify-webhook-url');
+const notifyMessageTextarea = document.getElementById('notify-message');
 const pdfPreviewCanvas = document.getElementById('pdf-preview-canvas');
 const stampOverlay = document.getElementById('stamp-overlay');
 const stampOverlayContent = document.getElementById('stamp-overlay-content');
@@ -1350,6 +1357,9 @@ processBtn.addEventListener('click', async () => {
     // Enviar copia digital a Transfont si está activo
     await sendSignedPdfToServer(finalPdfBytes, filename);
 
+    // Enviar notificación a cliente si está activo
+    await notifyCustomerOfSignedPdf(filename);
+
     if ('showSaveFilePicker' in window) {
       try {
         const handle = await window.showSaveFilePicker({
@@ -2359,5 +2369,90 @@ window.addEventListener('online', syncPendingTransfontDocuments);
 // Trigger initial offline sync check
 if (navigator.onLine) {
   syncPendingTransfontDocuments();
+}
+
+// --- CLIENT NOTIFICATION DISPATCHING LOGIC ---
+
+// Toggle notification settings
+if (notifyClientCheckbox && notifyClientConfig) {
+  notifyClientCheckbox.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      notifyClientConfig.classList.remove('hidden');
+    } else {
+      notifyClientConfig.classList.add('hidden');
+    }
+  });
+}
+
+// Toggle webhook URL input based on method selection
+if (notifyMethodSelect && notifyWebhookGroup) {
+  notifyMethodSelect.addEventListener('change', (e) => {
+    if (e.target.value === 'webhook') {
+      notifyWebhookGroup.classList.remove('hidden');
+    } else {
+      notifyWebhookGroup.classList.add('hidden');
+    }
+  });
+}
+
+// Dispatch client notification
+async function notifyCustomerOfSignedPdf(filename) {
+  if (!notifyClientCheckbox || !notifyClientCheckbox.checked) return;
+
+  const phone = notifyPhoneInput.value.trim();
+  const method = notifyMethodSelect.value;
+  const rawMsg = notifyMessageTextarea.value.trim();
+
+  if (!phone) {
+    showToast('Ingresa un teléfono para la notificación.', 'warning');
+    return;
+  }
+
+  // Replace placeholders in message
+  const appVerifyUrl = 'https://dictadank.github.io/qr-stamp/';
+  const finalMsg = rawMsg
+    .replace(/{filename}/g, filename)
+    .replace(/{verify_url}/g, appVerifyUrl);
+
+  if (method === 'whatsapp-direct') {
+    showToast('Generando enlace para enviar por WhatsApp...', 'info');
+    // Clean phone number (leave only digits)
+    const cleanPhone = phone.replace(/\D/g, '');
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(finalMsg)}`;
+    
+    // Redirect driver's browser to WA pre-filled chat
+    window.open(waUrl, '_blank');
+    showToast('WhatsApp abierto con chat pre-rellenado.', 'success');
+    logSecurityEvent(`Direct WhatsApp link generated for ${cleanPhone}`, 'info');
+  } else if (method === 'webhook') {
+    const webhookUrl = notifyWebhookUrlInput.value.trim();
+    if (!webhookUrl) return;
+
+    showToast('Enviando notificación al servidor SMS/WhatsApp...', 'info');
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phone: phone,
+          message: finalMsg,
+          filename: filename,
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      if (response.ok) {
+        showToast('Notificación enviada con éxito.', 'success');
+        logSecurityEvent(`Automated webhook notification sent to ${phone}`, 'info');
+      } else {
+        throw new Error(`HTTP Error ${response.status}`);
+      }
+    } catch (err) {
+      console.error('Failed to dispatch webhook notification:', err);
+      showToast('Error al enviar la notificación automática.', 'error');
+    }
+  }
 }
 
