@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { initCertificateUI, signPdfWithSelectedCertificate, clearSelectedCertificate } from './certificate-ui.js';
 import './style.css';
 
 // === SECURITY CONFIGURATION ===
@@ -673,6 +674,10 @@ autoClearClipboard();
 window.exportSecurityLogs = exportSecurityLogs;
 logSecurityEvent('Security system initialized', 'info');
 
+// Mejora v1.3.0: Initialize certificate UI
+initCertificateUI();
+logSecurityEvent('Digital certificate system initialized', 'info');
+
 // Initialize QR code on load
 initDefaultQR();
 
@@ -1181,6 +1186,9 @@ cancelBtn.addEventListener('click', () => {
     stampImageInput.value = '';
     stampUploadLabel.textContent = 'Seleccionar imagen (PNG, JPG)';
 
+    // Mejora v1.3.0: Limpiar certificado seleccionado
+    clearSelectedCertificate();
+
     stepWorkspace.classList.add('hidden');
     stepUpload.classList.remove('hidden');
 
@@ -1267,9 +1275,23 @@ processBtn.addEventListener('click', async () => {
       });
     }
 
-    const modifiedPdfBytes = await pdfLibDoc.save();
+    let finalPdfBytes = await pdfLibDoc.save();
 
-    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+    // Mejora v1.3.0: Sign PDF with digital certificate if enabled
+    const signCheckbox = document.getElementById('sign-with-cert');
+    if (signCheckbox && signCheckbox.checked) {
+      try {
+        finalPdfBytes = await signPdfWithSelectedCertificate(finalPdfBytes);
+        showToast('PDF firmado digitalmente', 'success');
+        logSecurityEvent('PDF signed with digital certificate', 'info');
+      } catch (err) {
+        handleSecureError(err, 'No se pudo firmar con certificado, descargando sin firma');
+        logSecurityEvent('Certificate signing failed, continuing without signature', 'warning');
+        // Continue without signature
+      }
+    }
+
+    const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
     const dotIdx = pdfFileName.lastIndexOf('.');
     const nameWithoutExt = dotIdx !== -1 ? pdfFileName.substring(0, dotIdx) : pdfFileName;
     const filename = sanitizeFilename(`${nameWithoutExt}_sellado.pdf`);
