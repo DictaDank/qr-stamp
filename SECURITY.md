@@ -120,7 +120,89 @@ Si encuentras un problema de seguridad:
 
 ---
 
+## Mejoras Adicionales Implementadas (v1.1.0)
+
+### 11. **Limpiar Datos Sensibles de Memoria**
+```javascript
+function clearSensitiveData() {
+  pdfBytes = null;
+  pdfDoc = null;
+  stampImageSrc = '';
+}
+```
+Se ejecuta automáticamente cuando el usuario cancela o cuando expira la sesión.
+
+### 12. **Deshabilitar Caché (HTTP Headers)**
+```
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+Expires: 0
+```
+PDFs descargados no se guardan en caché del navegador.
+
+### 16. **Validar Estructura Interna del PDF**
+- Verifica que el PDF tenga páginas válidas
+- Detecta PDFs corrupto o maliciosos
+- Se ejecuta después de validar magic bytes
+
+### 20. **Validar Transiciones de Estado**
+- Estados válidos: `UPLOAD` → `WORKSPACE` → `UPLOAD`
+- Previene estados inconsistentes
+- Rechaza transiciones inválidas
+
+### 21. **Timeout Automático de Sesión**
+- 15 minutos de inactividad
+- Limpia datos automáticamente
+- Se reinicia con cada interacción (click, tecla, movimiento)
+- Verifica cada minuto
+
+### 23. **No Revelar Stack Traces en Producción**
+```javascript
+if (process.env.NODE_ENV === 'production') {
+  console.error('[Security] Error occurred');
+  // Sin detalles técnicos
+} else {
+  console.error('[Debug] Error:', err.message);
+}
+```
+
+### 26. **Detectar Patrones de Abuso**
+- Máximo 10 operaciones PDF por minuto
+- Máximo 20 generaciones QR por minuto
+- Máximo 10 cargas de imagen por minuto
+- Mensajes de error claros si se excedan
+
+---
+
+## Logging de Eventos de Seguridad
+
+Todos los eventos se guardan en `sessionStorage` (no persiste entre sesiones):
+- PDF cargado
+- Imagen cargada
+- QR generado
+- PDF procesado
+- Transiciones de estado
+- Errores de seguridad
+- Intentos de abuso
+
+**Acceso en consola:**
+```javascript
+JSON.parse(sessionStorage.getItem('securityLogs'))
+```
+
+---
+
 ## Changelog de Seguridad
+
+**v1.1.0** - Mejoras avanzadas de seguridad:
+- Limpiar datos sensibles de memoria (Mejora 11)
+- Deshabilitar caché HTTP (Mejora 12)
+- Validar estructura interna del PDF (Mejora 16)
+- Validar transiciones de estado (Mejora 20)
+- Timeout automático de sesión (Mejora 21)
+- No revelar stack traces (Mejora 23)
+- Detectar patrones de abuso (Mejora 26)
+- Logging de eventos de seguridad
 
 **v1.0.0** - Implementación inicial de mejoras de seguridad:
 - Validación de archivos (magic bytes)

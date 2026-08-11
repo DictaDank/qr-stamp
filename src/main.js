@@ -10,8 +10,29 @@ const SECURITY_CONFIG = {
   MAX_PAGES: 10000,
   PDF_MAGIC_BYTES: [0x25, 0x50, 0x44, 0x46], // %PDF
   PROCESS_DEBOUNCE_MS: 2000,
-  MAX_QR_LENGTH: 2953 // QR code spec max
+  MAX_QR_LENGTH: 2953, // QR code spec max
+  SESSION_TIMEOUT_MS: 15 * 60 * 1000, // 15 min (Mejora 21)
+  MAX_ACTIONS_PER_MINUTE: 10, // (Mejora 26)
+  IS_PRODUCTION: !import.meta.env.DEV // (Mejora 23)
 };
+
+// Mejora 26: Contador de acciones para detectar abuso
+const actionTracker = {
+  processedPdfs: [],
+  generatedQRs: [],
+  uploadedImages: []
+};
+
+// Mejora 20: Estados válidos de la aplicación
+const APP_STATES = {
+  UPLOAD: 'upload',
+  WORKSPACE: 'workspace'
+};
+
+let currentAppState = APP_STATES.UPLOAD;
+
+// Mejora 21: Tracking de actividad
+let lastActivityTime = Date.now();
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -134,6 +155,132 @@ function sanitizeHtmlContent(element, text) {
   element.textContent = text;
 }
 
+// === MEJORA 11: Limpiar datos sensibles de memoria ===
+function clearSensitiveData() {
+  pdfBytes = null;
+  pdfDoc = null;
+  stampImageSrc = '';
+  pdfFileName = '';
+  // Notificar que los datos fueron limpiados
+  logSecurityEvent('Sensitive data cleared', 'info');
+}
+
+// === MEJORA 16: Validar estructura interna del PDF ===
+async function validatePdfStructure(bytes) {
+  try {
+    const doc = await PDFDocument.load(bytes);
+    const pages = doc.getPages();
+    if (!pages || pages.length === 0) {
+      throw new Error('PDF structure invalid: no pages found');
+    }
+    return true;
+  } catch (err) {
+    throw new Error('PDF structure validation failed');
+  }
+}
+
+// === MEJORA 20: Validar transiciones de estado ===
+function transitionState(newState) {
+  const validTransitions = {
+    [APP_STATES.UPLOAD]: [APP_STATES.WORKSPACE],
+    [APP_STATES.WORKSPACE]: [APP_STATES.UPLOAD]
+  };
+
+  if (!validTransitions[currentAppState]?.includes(newState)) {
+    logSecurityEvent(`Invalid state transition: ${currentAppState} -> ${newState}`, 'warning');
+    throw new Error('Invalid state transition');
+  }
+
+  currentAppState = newState;
+  logSecurityEvent(`State transition: ${newState}`, 'info');
+}
+
+// === MEJORA 21: Timeout automático para sesiones ===
+function updateActivityTime() {
+  lastActivityTime = Date.now();
+}
+
+function checkSessionTimeout() {
+  const elapsed = Date.now() - lastActivityTime;
+  if (elapsed > SECURITY_CONFIG.SESSION_TIMEOUT_MS) {
+    clearSensitiveData();
+    showToast('Sesión expirada por inactividad. Datos limpiados.', 'error');
+    logSecurityEvent('Session timeout triggered', 'warning');
+  }
+}
+
+// === MEJORA 23: No revelar stack traces en producción ===
+function handleSecureError(err, userMessage = 'Ha ocurrido un error') {
+  if (SECURITY_CONFIG.IS_PRODUCTION) {
+    // En producción: no loguear detalles
+    console.error('[Security] Error occurred');
+    logSecurityEvent('Error occurred (details hidden in production)', 'warning');
+  } else {
+    // En desarrollo: mostrar detalles para debugging
+    console.error('[Debug] Error:', err.message);
+  }
+  showToast(userMessage, 'error');
+}
+
+// === MEJORA 26: Detectar patrones de abuso ===
+function trackAction(actionType) {
+  const now = Date.now();
+  const oneMinuteAgo = now - 60000;
+
+  if (actionType === 'pdf') {
+    actionTracker.processedPdfs = actionTracker.processedPdfs.filter(t => t > oneMinuteAgo);
+    actionTracker.processedPdfs.push(now);
+
+    if (actionTracker.processedPdfs.length > SECURITY_CONFIG.MAX_ACTIONS_PER_MINUTE) {
+      logSecurityEvent(`Rate limit exceeded: PDFs (${actionTracker.processedPdfs.length}/min)`, 'warning');
+      throw new Error('Demasiadas operaciones. Por favor espera.');
+    }
+  } else if (actionType === 'qr') {
+    actionTracker.generatedQRs = actionTracker.generatedQRs.filter(t => t > oneMinuteAgo);
+    actionTracker.generatedQRs.push(now);
+
+    if (actionTracker.generatedQRs.length > SECURITY_CONFIG.MAX_ACTIONS_PER_MINUTE * 2) {
+      logSecurityEvent(`Rate limit exceeded: QRs (${actionTracker.generatedQRs.length}/min)`, 'warning');
+      throw new Error('Demasiados códigos QR. Por favor espera.');
+    }
+  } else if (actionType === 'image') {
+    actionTracker.uploadedImages = actionTracker.uploadedImages.filter(t => t > oneMinuteAgo);
+    actionTracker.uploadedImages.push(now);
+
+    if (actionTracker.uploadedImages.length > SECURITY_CONFIG.MAX_ACTIONS_PER_MINUTE) {
+      logSecurityEvent(`Rate limit exceeded: Images (${actionTracker.uploadedImages.length}/min)`, 'warning');
+      throw new Error('Demasiadas imágenes. Por favor espera.');
+    }
+  }
+}
+
+// === Logging de eventos de seguridad ===
+function logSecurityEvent(event, severity = 'info') {
+  const log = {
+    timestamp: new Date().toISOString(),
+    event,
+    severity,
+    state: currentAppState
+  };
+
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('securityLogs') || '[]');
+    logs.push(log);
+    // Mantener solo los últimos 100 eventos
+    sessionStorage.setItem('securityLogs', JSON.stringify(logs.slice(-100)));
+  } catch (e) {
+    // Si sessionStorage falla, ignorar silenciosamente
+  }
+}
+
+// === Iniciar monitoreo de sesión ===
+setInterval(checkSessionTimeout, 60000); // Verificar cada minuto
+
+// Actualizar actividad en cualquier interacción del usuario
+document.addEventListener('click', updateActivityTime);
+document.addEventListener('keydown', updateActivityTime);
+document.addEventListener('mousemove', updateActivityTime);
+
 // Initialize QR code on load
 initDefaultQR();
 
@@ -141,6 +288,8 @@ initDefaultQR();
 
 async function initDefaultQR() {
   try {
+    updateActivityTime();
+    trackAction('qr');
     const defaultText = qrTextInput.value || 'https://example.com';
     validateQrInput(defaultText);
     const qrDataUrl = await QRCode.toDataURL(defaultText, {
@@ -163,9 +312,9 @@ async function initDefaultQR() {
     img.alt = 'Sello Preview';
     stampOverlayContent.innerHTML = '';
     stampOverlayContent.appendChild(img);
+    logSecurityEvent('Default QR initialized', 'info');
   } catch (err) {
-    console.error('Error generating default QR');
-    showToast('Error al generar código QR.', 'error');
+    handleSecureError(err, 'Error al generar código QR.');
   }
 }
 
@@ -211,6 +360,8 @@ pdfFileInput.addEventListener('change', (e) => {
 // Load PDF Document
 async function handlePdfFile(file) {
   try {
+    updateActivityTime();
+    trackAction('pdf');
     validateFileSize(file, SECURITY_CONFIG.MAX_PDF_SIZE);
 
     pdfFileName = sanitizeFilename(file.name);
@@ -227,6 +378,9 @@ async function handlePdfFile(file) {
           throw new Error('Archivo inválido: no es un PDF válido');
         }
 
+        // Mejora 16: Validar estructura del PDF
+        await validatePdfStructure(pdfBytes);
+
         const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
         pdfDoc = await loadingTask.promise;
         validatePageCount(pdfDoc.numPages);
@@ -236,20 +390,24 @@ async function handlePdfFile(file) {
         stepUpload.classList.add('hidden');
         stepWorkspace.classList.remove('hidden');
 
+        // Mejora 20: Transición de estado
+        transitionState(APP_STATES.WORKSPACE);
+
         await renderPreviewPage(currentPage);
         applyPreset('bottom-right');
 
         showToast('Documento cargado correctamente.', 'success');
+        logSecurityEvent('PDF loaded successfully', 'info');
       } catch (err) {
-        console.error('PDF load error');
-        showToast('Error al procesar el archivo PDF.', 'error');
+        // Mejora 23: No revelar detalles en producción
+        handleSecureError(err, 'Error al procesar el archivo PDF.');
         pdfBytes = null;
         pdfDoc = null;
       }
     };
     reader.readAsArrayBuffer(file);
   } catch (err) {
-    showToast(err.message, 'error');
+    handleSecureError(err, err.message);
   }
 }
 
@@ -344,6 +502,8 @@ stampImageInput.addEventListener('change', (e) => {
   if (!file) return;
 
   try {
+    updateActivityTime();
+    trackAction('image');
     validateFileSize(file, SECURITY_CONFIG.MAX_IMAGE_SIZE);
     sanitizeHtmlContent(stampUploadLabel, file.name);
 
@@ -367,18 +527,19 @@ stampImageInput.addEventListener('change', (e) => {
           stampOverlayContent.innerHTML = '';
           stampOverlayContent.appendChild(imgEl);
           updateStampSizeAndPosition();
+          logSecurityEvent('Image uploaded successfully', 'info');
         };
         img.onerror = () => {
-          showToast('Error al cargar la imagen', 'error');
+          handleSecureError(new Error('Image load error'), 'Error al cargar la imagen');
         };
         img.src = dataUrl;
       } catch (err) {
-        showToast(err.message, 'error');
+        handleSecureError(err, err.message);
       }
     };
     reader.readAsDataURL(file);
   } catch (err) {
-    showToast(err.message, 'error');
+    handleSecureError(err, err.message);
   }
 });
 
@@ -394,6 +555,8 @@ async function generateQRFromInput() {
   if (!text) return;
 
   try {
+    updateActivityTime();
+    trackAction('qr');
     validateQrInput(text);
     const qrDataUrl = await QRCode.toDataURL(text, {
       margin: 1,
@@ -416,9 +579,9 @@ async function generateQRFromInput() {
     stampOverlayContent.innerHTML = '';
     stampOverlayContent.appendChild(img);
     updateStampSizeAndPosition();
+    logSecurityEvent('QR generated from input', 'info');
   } catch (err) {
-    console.error('QR generation error');
-    showToast('Error al generar código QR', 'error');
+    handleSecureError(err, 'Error al generar código QR');
   }
 }
 
@@ -589,43 +752,52 @@ function applyPreset(preset) {
 // --- Cancel Button ---
 
 cancelBtn.addEventListener('click', () => {
-  // Clear file inputs & state
-  pdfBytes = null;
-  pdfDoc = null;
-  pdfFileName = '';
-  pdfFileInput.value = '';
-  stampImageInput.value = '';
-  stampUploadLabel.textContent = 'Seleccionar imagen (PNG, JPG)';
-  
-  // Hide workspace, show upload
-  stepWorkspace.classList.add('hidden');
-  stepUpload.classList.remove('hidden');
+  try {
+    updateActivityTime();
+    // Mejora 11: Limpiar datos sensibles
+    clearSensitiveData();
+    pdfFileInput.value = '';
+    stampImageInput.value = '';
+    stampUploadLabel.textContent = 'Seleccionar imagen (PNG, JPG)';
+
+    stepWorkspace.classList.add('hidden');
+    stepUpload.classList.remove('hidden');
+
+    // Mejora 20: Transición de estado
+    transitionState(APP_STATES.UPLOAD);
+
+    showToast('Datos limpiados. Cargando nueva sesión.', 'success');
+  } catch (err) {
+    handleSecureError(err, 'Error al limpiar datos');
+  }
 });
 
 // --- PDF Stamping Core (pdf-lib) ---
 
 processBtn.addEventListener('click', async () => {
-  // Rate limiting (Mejora 10)
-  const now = Date.now();
-  if (isProcessing || (now - lastProcessTime) < SECURITY_CONFIG.PROCESS_DEBOUNCE_MS) {
-    showToast('Por favor espera antes de procesar otro documento.', 'error');
-    return;
-  }
-
-  if (!pdfBytes) return;
-
-  if (stampType === 'image' && !stampImageSrc.startsWith('data:image')) {
-    showToast('Sube una imagen de firma o selecciona Código QR primero.', 'error');
-    return;
-  }
-
-  isProcessing = true;
-  lastProcessTime = now;
-  processBtn.disabled = true;
-  processSpinner.classList.remove('hidden');
-  processBtnText.textContent = 'Procesando...';
-
   try {
+    updateActivityTime();
+    trackAction('pdf');
+
+    const now = Date.now();
+    if (isProcessing || (now - lastProcessTime) < SECURITY_CONFIG.PROCESS_DEBOUNCE_MS) {
+      showToast('Por favor espera antes de procesar otro documento.', 'error');
+      return;
+    }
+
+    if (!pdfBytes) return;
+
+    if (stampType === 'image' && !stampImageSrc.startsWith('data:image')) {
+      showToast('Sube una imagen de firma o selecciona Código QR primero.', 'error');
+      return;
+    }
+
+    isProcessing = true;
+    lastProcessTime = now;
+    processBtn.disabled = true;
+    processSpinner.classList.remove('hidden');
+    processBtnText.textContent = 'Procesando...';
+
     const pageIndices = parseTargetPages();
     if (pageIndices.length === 0) {
       showToast('Las páginas especificadas no corresponden al PDF cargado.', 'error');
@@ -694,6 +866,7 @@ processBtn.addEventListener('click', async () => {
         await writable.write(blob);
         await writable.close();
         showToast('PDF guardado con éxito.', 'success');
+        logSecurityEvent('PDF processed and saved', 'info');
         return;
       } catch (err) {
         if (err.name === 'AbortError') {
@@ -713,9 +886,9 @@ processBtn.addEventListener('click', async () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(downloadUrl);
     showToast('PDF generado y descargado con éxito.', 'success');
+    logSecurityEvent('PDF processed and downloaded', 'info');
   } catch (err) {
-    console.error('PDF stamping error');
-    showToast('Hubo un error al estampar el PDF.', 'error');
+    handleSecureError(err, 'Hubo un error al estampar el PDF.');
   } finally {
     isProcessing = false;
     processBtn.disabled = false;
@@ -827,6 +1000,10 @@ if (urlParams.has('test')) {
       if (!validatePdfMagicBytes(buffer)) {
         throw new Error('Invalid PDF format');
       }
+      // Mejora 16: Validar estructura
+      return validatePdfStructure(buffer).then(() => buffer);
+    })
+    .then(buffer => {
       pdfBytes = buffer;
       pdfFileName = sanitizeFilename('sample.pdf');
       sanitizeHtmlContent(pdfMetaName, pdfFileName);
@@ -841,12 +1018,17 @@ if (urlParams.has('test')) {
       stepUpload.classList.add('hidden');
       stepWorkspace.classList.remove('hidden');
 
+      // Mejora 20: Transición de estado
+      currentAppState = APP_STATES.WORKSPACE;
+
       renderPreviewPage(1);
       applyPreset('bottom-right');
       showToast('PDF de prueba cargado automáticamente.', 'success');
+      logSecurityEvent('Test PDF loaded', 'info');
     })
     .catch(() => {
       showToast('Error al auto-cargar el PDF de prueba.', 'error');
+      logSecurityEvent('Test PDF load failed', 'warning');
     });
 }
 
