@@ -31,26 +31,8 @@
     </header>
 
     <main>
-      <!-- STEP 1: UPLOAD SECTION -->
-      <section id="step-upload" class="glass-panel">
-        <div class="upload-hero">
-          <h1>Sella tus PDFs de forma instantánea</h1>
-          <p>Inserta tu firma, logotipo, código de barras o códigos QR dinámicos. Procesamiento en local, sin subir tus archivos a la red.</p>
-        </div>
-        <div id="dropzone" class="dropzone">
-          <div class="dropzone-icon-container">
-            <svg xmlns="http://www.w3.org/2000/svg" class="dropzone-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 16.5 4.5H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Z" />
-            </svg>
-          </div>
-          <h2 class="dropzone-title">Arrastra tu archivo PDF aquí</h2>
-          <p class="dropzone-sub">o haz clic para seleccionar desde tu dispositivo</p>
-          <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden" />
-        </div>
-      </section>
-
-      <!-- STEP 2: WORKSPACE SECTION (HIDDEN BY DEFAULT) -->
-      <section id="step-workspace" class="workspace-layout hidden">
+      <!-- STEP 2: WORKSPACE SECTION -->
+      <section id="step-workspace" class="workspace-layout">
         <!-- Sidebar Controls -->
         <div class="controls-sidebar glass-panel">
           <div class="section-title">
@@ -248,39 +230,54 @@
               </svg>
               <span>Vista Previa Interactiva</span>
             </h2>
-            <div id="pdf-meta-name" class="pdf-meta-name">Documento.pdf</div>
+            <div id="pdf-meta-name" class="pdf-meta-name">Ningún archivo seleccionado</div>
           </div>
 
-          <div class="preview-viewport">
-            <div id="canvas-wrapper" class="canvas-wrapper">
-              <canvas id="pdf-preview-canvas"></canvas>
-              <div id="stamp-overlay" class="stamp-overlay">
-                <div id="stamp-overlay-content" class="stamp-overlay-placeholder">Arrastra aquí</div>
+          <!-- DROPZONE (visible when no PDF loaded) -->
+          <div id="dropzone" class="dropzone" style="margin: 1.5rem 0;">
+            <div class="dropzone-icon-container">
+              <svg xmlns="http://www.w3.org/2000/svg" class="dropzone-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 16.5 4.5H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+            </div>
+            <h2 class="dropzone-title">Arrastra tu archivo PDF aquí</h2>
+            <p class="dropzone-sub">o haz clic para seleccionar desde tu dispositivo</p>
+            <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden" />
+          </div>
+
+          <!-- Preview Workspace Controls (hidden initially until PDF loaded) -->
+          <div id="preview-workspace-controls" class="hidden">
+            <div class="preview-viewport">
+              <div id="canvas-wrapper" class="canvas-wrapper">
+                <canvas id="pdf-preview-canvas"></canvas>
+                <div id="stamp-overlay" class="stamp-overlay">
+                  <div id="stamp-overlay-content" class="stamp-overlay-placeholder">Arrastra aquí</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="preview-nav">
-            <button type="button" id="prev-page" class="nav-btn" disabled>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 16px; height: 16px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-            </button>
-            <span id="page-num-indicator" style="font-size: 0.9rem; font-weight: 500;">Página 1 de 1</span>
-            <button type="button" id="next-page" class="nav-btn" disabled>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 16px; height: 16px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
+            <div class="preview-nav">
+              <button type="button" id="prev-page" class="nav-btn" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              <span id="page-num-indicator" style="font-size: 0.9rem; font-weight: 500;">Página 1 de 1</span>
+              <button type="button" id="next-page" class="nav-btn" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
 
-          <!-- Bottom Actions -->
-          <div class="action-area">
-            <button type="button" id="cancel-btn" class="btn btn-secondary">Subir otro PDF</button>
-            <button type="button" id="process-btn" class="btn btn-primary">
-              <span id="process-btn-text">Generar y Descargar</span>
-              <span id="process-spinner" class="spinner hidden"></span>
-            </button>
+            <!-- Bottom Actions -->
+            <div class="action-area">
+              <button type="button" id="cancel-btn" class="btn btn-secondary">Subir otro PDF</button>
+              <button type="button" id="process-btn" class="btn btn-primary">
+                <span id="process-btn-text">Generar y Descargar</span>
+                <span id="process-spinner" class="spinner hidden"></span>
+              </button>
+            </div>
           </div>
         </div>
       </section>

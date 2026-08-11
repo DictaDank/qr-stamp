@@ -44,7 +44,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 // Elements
 const dropzone = document.getElementById('dropzone');
 const pdfFileInput = document.getElementById('pdf-file-input');
-const stepUpload = document.getElementById('step-upload');
+const previewWorkspaceControls = document.getElementById('preview-workspace-controls');
 const stepWorkspace = document.getElementById('step-workspace');
 const cancelBtn = document.getElementById('cancel-btn');
 const processBtn = document.getElementById('process-btn');
@@ -822,8 +822,8 @@ async function handlePdfFile(file) {
         pdfLibDocInstance = await PDFDocument.load(pdfBytes);
         await loadPdfFormFields();
 
-        stepUpload.classList.add('hidden');
-        stepWorkspace.classList.remove('hidden');
+        dropzone.classList.add('hidden');
+        previewWorkspaceControls.classList.remove('hidden');
 
         // Mejora 20: Transición de estado
         transitionState(APP_STATES.WORKSPACE);
@@ -1234,8 +1234,11 @@ cancelBtn.addEventListener('click', () => {
     pdfFormFieldsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-dimmed); text-align: center; display: block; margin-top: 1rem;">Carga un PDF para ver sus campos.</span>';
     pdfLibDocInstance = null;
 
-    stepWorkspace.classList.add('hidden');
-    stepUpload.classList.remove('hidden');
+    previewWorkspaceControls.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    
+    const pdfMetaName = document.getElementById('pdf-meta-name');
+    if (pdfMetaName) pdfMetaName.textContent = 'Ningún archivo seleccionado';
 
     // Mejora 20: Transición de estado
     transitionState(APP_STATES.UPLOAD);
@@ -1512,8 +1515,8 @@ if (urlParams.has('test')) {
       pdfLibDocInstance = await PDFDocument.load(pdfBytes);
       await loadPdfFormFields();
 
-      stepUpload.classList.add('hidden');
-      stepWorkspace.classList.remove('hidden');
+      dropzone.classList.add('hidden');
+      previewWorkspaceControls.classList.remove('hidden');
 
       // Mejora 20: Transición de estado
       currentAppState = APP_STATES.WORKSPACE;
@@ -1560,11 +1563,7 @@ if (navStampBtn && navVerifyBtn) {
     navVerifyBtn.style.borderBottom = 'none';
 
     stepVerify.classList.add('hidden');
-    if (pdfBytes) {
-      stepWorkspace.classList.remove('hidden');
-    } else {
-      stepUpload.classList.remove('hidden');
-    }
+    stepWorkspace.classList.remove('hidden');
   });
 
   navVerifyBtn.addEventListener('click', () => {
@@ -1575,7 +1574,6 @@ if (navStampBtn && navVerifyBtn) {
     navStampBtn.style.color = 'var(--text-muted)';
     navStampBtn.style.borderBottom = 'none';
 
-    stepUpload.classList.add('hidden');
     stepWorkspace.classList.add('hidden');
     stepVerify.classList.remove('hidden');
   });
