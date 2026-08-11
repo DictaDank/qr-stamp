@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>⚙️ Detalles Técnicos - QR-Stamp v1.3.0</title>
+    <meta name="description" content="Documentación técnica completa de QR-Stamp. 56 mejoras de seguridad, arquitectura, APIs, y más." />
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+      :root {
+        --bg-main: #0c0e12;
+        --bg-card: rgba(22, 26, 36, 0.65);
+        --border-color: rgba(197, 168, 128, 0.12);
+        --primary: #c5a880;
+        --primary-glow: rgba(197, 168, 128, 0.2);
+        --text-main: #f5f5f7;
+        --text-muted: #94a3b8;
+        --text-dimmed: #64748b;
+        --success: #10b981;
+        --error: #ef4444;
+        --warning: #f59e0b;
+        --font-sans: 'Inter', sans-serif;
+        --font-display: 'Outfit', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: var(--bg-main);
+        background-image:
+          radial-gradient(at 0% 0%, rgba(197, 168, 128, 0.07) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(168, 140, 96, 0.05) 0px, transparent 50%),
+          radial-gradient(at 50% 50%, rgba(12, 14, 18, 1) 0px, rgba(7, 8, 10, 1) 100%);
+        color: var(--text-main);
+        font-family: var(--font-sans);
+        line-height: 1.6;
+      }
+
+      header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--border-color);
+        backdrop-filter: blur(12px);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(8, 12, 20, 0.7);
+      }
+
+      .header-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-decoration: none;
+        color: var(--text-main);
+      }
+
+      .nav {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .nav-btn {
+        padding: 0.5rem 1rem;
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-muted);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+      }
+
+      .nav-btn:hover {
+        border-color: var(--primary);
+        color: var(--text-main);
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 3rem 2rem;
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: 3rem;
+      }
+
+      .hero h1 {
+        font-family: var(--font-display);
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        background: linear-gradient(to right, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hero p {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+      }
+
+      .version-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px;
+        color: var(--success);
+        font-size: 0.9rem;
+        margin-top: 1rem;
+      }
+
+      .section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        backdrop-filter: blur(16px);
+      }
+
+      .section h2 {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .section h3 {
+        font-size: 1.2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        color: var(--text-main);
+      }
+
+      .code-block {
+        background: rgba(0, 0, 0, 0.3);
+        border-left: 4px solid var(--primary);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        overflow-x: auto;
+        line-height: 1.5;
+      }
+
+      .table-responsive {
+        overflow-x: auto;
+        margin-bottom: 1.5rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th {
+        background: rgba(197, 168, 128, 0.1);
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 2px solid var(--border-color);
+        font-weight: 600;
+      }
+
+      td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      tr:hover {
+        background: rgba(197, 168, 128, 0.05);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      .card h3 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+      }
+
+      .card p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+
+      .list-group {
+        list-style: none;
+      }
+
+      .list-group li {
+        padding: 0.5rem 0;
+        padding-left: 1.75rem;
+        position: relative;
+      }
+
+      .list-group li:before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        color: var(--success);
+        font-weight: bold;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        background: rgba(197, 168, 128, 0.2);
+        border-radius: 6px;
+        font-size: 0.85rem;
+        color: var(--primary);
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .badge.critical {
+        background: rgba(239, 68, 68, 0.2);
+        color: var(--error);
+      }
+
+      .badge.warning {
+        background: rgba(245, 158, 11, 0.2);
+        color: var(--warning);
+      }
+
+      .improvement-table {
+        width: 100%;
+        margin-bottom: 1.5rem;
+      }
+
+      .improvement-table tr:nth-child(odd) {
+        background: rgba(197, 168, 128, 0.02);
+      }
+
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-dimmed);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border-color);
+        margin-top: 3rem;
+      }
+
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--primary);
+        text-decoration: none;
+        margin-bottom: 2rem;
+        transition: all 0.3s;
+      }
+
+      .back-btn:hover {
+        gap: 1rem;
+      }
+
+      .icon {
+        font-size: 1.5rem;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 1.5rem;
+        overflow-x: auto;
+      }
+
+      .tab-btn {
+        padding: 0.75rem 1.5rem;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.3s;
+        white-space: nowrap;
+      }
+
+      .tab-btn.active {
+        border-bottom-color: var(--primary);
+        color: var(--text-main);
+      }
+
+      .tab-btn:hover {
+        color: var(--text-main);
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .stat-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+      }
+
+      .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+      }
+
+      .stat-label {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <a href="/" class="logo">
+          <span>⚙️ Detalles Técnicos</span>
+        </a>
+        <div class="nav">
+          <a href="/" class="nav-btn">← QR-Stamp</a>
+          <a href="/security-info.html" class="nav-btn">Seguridad</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="hero">
+        <h1>⚙️ Detalles Técnicos</h1>
+        <p>Documentación técnica completa de QR-Stamp v1.3.0</p>
+        <div class="version-badge">✅ 56 Mejoras de Seguridad Implementadas</div>
+      </div>
+
+      <!-- ESTADÍSTICAS -->
+      <div class="section">
+        <h2><span class="icon">📊</span> Estadísticas del Proyecto</h2>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-number">56</div>
+            <div class="stat-label">Mejoras de Seguridad</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">1,900+</div>
+            <div class="stat-label">Líneas de Código</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">40+</div>
+            <div class="stat-label">Funciones de Validación</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">8</div>
+            <div class="stat-label">Capas por PDF</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">100%</div>
+            <div class="stat-label">Local</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">4</div>
+            <div class="stat-label">Versiones</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ARQUITECTURA -->
+      <div class="section">
+        <h2><span class="icon">🏗️</span> Arquitectura</h2>
+
+        <h3>Stack Tecnológico</h3>
+        <div class="code-block">Frontend: Vanilla JavaScript (ES6+)
+Build Tool: Vite 8.2.0
+PDF Processing: PDF.js + pdf-lib
+QR Generation: qrcode 1.5.4
+Cryptography: node-forge + jsrsasign
+Certificates: pkijs + asn1js
+Bundler: Rolldown (Vite)
+Styling: CSS3 + CSS Variables</div>
+
+        <h3>Estructura de Archivos</h3>
+        <div class="code-block">src/
+├── main.js (línea maestra)
+├── style.css (estilos)
+├── certificate-ui.js (interfaz certificados)
+└── security/
+    ├── certificates.js (gestión de certificados)
+    └── digital-signature.js (firma digital)
+
+public/
+├── favicon.svg
+├── icons.svg
+└── sample.pdf
+
+dist/
+└── (build producción)</div>
+
+        <h3>Flujo de Datos</h3>
+        <div class="code-block">Usuario carga PDF
+    ↓
+[8 Validaciones]
+    ↓
+Carga en memoria (pdfjs)
+    ↓
+Usuario agrega sello
+    ↓
+[5 Validaciones]
+    ↓
+Usuario procesa
+    ↓
+[Firma Digital Optional]
+    ↓
+Descarga PDF procesado
+    ↓
+Limpiar datos de memoria</div>
+      </div>
+
+      <!-- MEJORAS v1.0 -->
+      <div class="section">
+        <h2><span class="icon">✅</span> Mejoras v1.0.0 (Validación Básica)</h2>
+
+        <div class="table-responsive">
+          <table class="improvement-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Mejora</th>
+                <th>Descripción</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>Sanitización XSS</td>
+                <td>Usa textContent, no innerHTML con datos del usuario</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>Validación de Tamaño</td>
+                <td>PDFs < 50MB, Imágenes < 5MB</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>Magic Bytes PDF</td>
+                <td>Verifica que comience con %PDF</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>Sanitización de Nombres</td>
+                <td>Reemplaza caracteres peligrosos</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>CSP Headers</td>
+                <td>Content Security Policy en vite.config.js</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td>Validación de Páginas</td>
+                <td>Máximo 10,000 páginas</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td>Validación de Data URLs</td>
+                <td>Verifica formato PNG/JPEG</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>8</td>
+                <td>Rate Limiting</td>
+                <td>2 segundos de debounce</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+              <tr>
+                <td>9</td>
+                <td>Documentación</td>
+                <td>Client-side only, sin servidor</td>
+                <td><span class="badge">Implementado</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- MEJORAS v1.1 -->
+      <div class="section">
+        <h2><span class="icon">✅</span> Mejoras v1.1.0 (Seguridad Avanzada)</h2>
+
+        <div class="grid">
+          <div class="card">
+            <h3>11. Limpiar Memoria</h3>
+            <p>clearSensitiveData() ejecuta automáticamente al cancelar</p>
+          </div>
+          <div class="card">
+            <h3>12. Deshabilitar Caché</h3>
+            <p>Cache-Control: no-store, no-cache en headers</p>
+          </div>
+          <div class="card">
+            <h3>16. Validar Estructura PDF</h3>
+            <p>Verifica páginas válidas después de magic bytes</p>
+          </div>
+          <div class="card">
+            <h3>20. Máquina de Estados</h3>
+            <p>Transiciones válidas: UPLOAD ⟷ WORKSPACE</p>
+          </div>
+          <div class="card">
+            <h3>21. Timeout Sesión</h3>
+            <p>15 minutos inactividad → auto-limpiar</p>
+          </div>
+          <div class="card">
+            <h3>23. No Stack Traces</h3>
+            <p>Errores genéricos en producción</p>
+          </div>
+          <div class="card">
+            <h3>26. Detectar Abuso</h3>
+            <p>Rate limit: 10 PDFs, 20 QRs, 10 imágenes/min</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEJORAS v1.2 -->
+      <div class="section">
+        <h2><span class="icon">✅</span> Mejoras v1.2.0 (30 Protecciones Avanzadas)</h2>
+
+        <h3>Criptografía (27-30)</h3>
+        <ul class="list-group">
+          <li><span class="badge">27</span> Hash SHA-256 para PDFs</li>
+          <li><span class="badge">28</span> Firma digital preparada (v1.3.0)</li>
+          <li><span class="badge">29</span> SSL/TLS validation preparado</li>
+          <li><span class="badge">30</span> Encriptación SessionStorage preparada</li>
+        </ul>
+
+        <h3>Detección de Amenazas (31-34)</h3>
+        <ul class="list-group">
+          <li><span class="badge critical">31</span> Detectar JavaScript embebido ⭐</li>
+          <li><span class="badge critical">32</span> Validar metadatos PDF ⭐</li>
+          <li><span class="badge critical">33</span> Detectar compresión anómala ⭐</li>
+          <li><span class="badge critical">34</span> Validar formato QR ⭐</li>
+        </ul>
+
+        <h3>Prevención de Ataques (35-39)</h3>
+        <ul class="list-group">
+          <li><span class="badge critical">35</span> Prevenir ReDoS ⭐</li>
+          <li><span class="badge critical">36</span> Prevenir Prototype Pollution ⭐</li>
+          <li><span class="badge warning">37</span> XXE validation preparado</li>
+          <li><span class="badge critical">38</span> CSP con nonce dinámico ⭐</li>
+          <li><span class="badge critical">39</span> Detectar Zip Bombs ⭐</li>
+        </ul>
+
+        <h3>Interfaz & Monitoreo (40-46)</h3>
+        <ul class="list-group">
+          <li><span class="badge">40</span> Bloquear copy de PDFs</li>
+          <li><span class="badge">41</span> Bloquear print/screenshots</li>
+          <li><span class="badge">42</span> Requerir interacción de usuario</li>
+          <li><span class="badge">43</span> Feedback visual de validación</li>
+          <li><span class="badge">44</span> Exportar logs de auditoría a CSV</li>
+          <li><span class="badge">45</span> Monitoreo de performance</li>
+          <li><span class="badge">46</span> Monitoreo de mutaciones DOM</li>
+        </ul>
+
+        <h3>Privacidad & Resiliencia (49-55)</h3>
+        <ul class="list-group">
+          <li><span class="badge">49</span> Sanitizar URL del historial</li>
+          <li><span class="badge warning">50</span> Respetar DNT headers (preparado)</li>
+          <li><span class="badge">51</span> Limpiar clipboard automáticamente</li>
+          <li><span class="badge">52</span> Ocultar info del navegador</li>
+          <li><span class="badge">53</span> Rollback automático en errores</li>
+          <li><span class="badge">54</span> Versionado de datos</li>
+          <li><span class="badge">55</span> Health checks periódicos</li>
+        </ul>
+      </div>
+
+      <!-- MEJORAS v1.3 -->
+      <div class="section">
+        <h2><span class="icon">✅</span> Mejoras v1.3.0 (Firma Digital Española)</h2>
+
+        <h3>Características Nuevas</h3>
+        <div class="code-block">✅ Certificados FNMT (.p12, .pfx)
+✅ Validación contra FNMT CRL
+✅ Firma PKCS#7/XAdES
+✅ SHA-256-RSA cryptography
+✅ Timestamp de TSA
+✅ Validez legal (eIDAS)
+✅ No-repudio garantizado
+✅ Panel de certificados UI
+✅ Validación de cadena de confianza
+✅ Auditoría de firmas
+✅ Validación de cadena de confianza
+✅ Auditoría de firmas      </div>
+
+      <!-- DEPENDENCIAS -->
+      <div class="section">
+        <h2><span class="icon">📦</span> Dependencias</h2>
+
+        <div class="code-block">npm install --save \
+  node-forge@1.3.0 \
+  jsrsasign@10.5.25 \
+  pkijs@2.2.11 \
+  asn1js@3.0.5
+        </div>
+      </div>
+
+      <footer>
+        <p>&copy; 2026 QR-Stamp. Detalles Técnicos v1.3.0</p>
+        <p style="margin-top: 0.5rem;">56 mejoras de seguridad • 100% client-side • Firma digital FNMT</p>
+      </footer>
+    </main>
+  </body>
+</html>
