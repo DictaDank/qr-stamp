@@ -220,6 +220,21 @@
           </div>
         </div>
 
+        <!-- Transfont Server Sync -->
+        <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+          <label class="form-label" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
+            <span>Enlace API (Copia Remota)</span>
+            <input type="checkbox" id="send-copy-checkbox" style="width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" />
+          </label>
+          <div id="send-copy-config" class="hidden" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">API Endpoint (Transfont URL):</span>
+            <input type="text" id="send-copy-url" class="text-input" value="https://api.transfont.com/v1/documents/upload" style="font-size: 0.8rem; padding: 0.4rem 0.6rem; width: 100%;" />
+            <p style="font-size: 0.7rem; color: var(--text-dimmed); margin: 0;">
+              Envía de forma automatizada una copia en formato digital firmado a tu servidor de transportes en cuanto se genere la descarga.
+            </p>
+          </div>
+        </div>
+
         <!-- Live Preview Panel -->
         <div class="preview-panel glass-panel">
           <div class="preview-header">

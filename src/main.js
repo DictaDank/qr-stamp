@@ -78,6 +78,9 @@ const stampPagesRangeGroup = document.getElementById('stamp-pages-range-group');
 const stampPagesInput = document.getElementById('stamp-pages-input');
 
 const pdfMetaName = document.getElementById('pdf-meta-name');
+const sendCopyCheckbox = document.getElementById('send-copy-checkbox');
+const sendCopyConfig = document.getElementById('send-copy-config');
+const sendCopyUrlInput = document.getElementById('send-copy-url');
 const pdfPreviewCanvas = document.getElementById('pdf-preview-canvas');
 const stampOverlay = document.getElementById('stamp-overlay');
 const stampOverlayContent = document.getElementById('stamp-overlay-content');
@@ -1344,6 +1347,9 @@ processBtn.addEventListener('click', async () => {
     const nameWithoutExt = dotIdx !== -1 ? pdfFileName.substring(0, dotIdx) : pdfFileName;
     const filename = sanitizeFilename(`${nameWithoutExt}_sellado.pdf`);
 
+    // Enviar copia digital a Transfont si está activo
+    await sendSignedPdfToServer(finalPdfBytes, filename);
+
     if ('showSaveFilePicker' in window) {
       try {
         const handle = await window.showSaveFilePicker({
@@ -2172,5 +2178,186 @@ if (tsApplyBtn) {
     showToast('Sello de texto profesional cargado localmente', 'success');
     logSecurityEvent('Text stamp applied locally', 'info');
   });
+}
+
+// --- TRANSFONT API INTEGRATION & AUTOMATIC QR PDF LOADING ---
+
+// Toggle API settings visibility
+if (sendCopyCheckbox && sendCopyConfig) {
+  sendCopyCheckbox.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      sendCopyConfig.classList.remove('hidden');
+    } else {
+      sendCopyConfig.classList.add('hidden');
+    }
+  });
+}
+
+// Download PDF from URL query parameter (?pdf=https://...)
+if (urlParams.has('pdf')) {
+  const pdfUrl = urlParams.get('pdf');
+  showToast('Descargando albarán para comprobación...', 'info');
+  fetch(pdfUrl)
+    .then(res => {
+      if (!res.ok) throw new Error('No se pudo descargar el PDF de la URL proporcionada.');
+      return res.arrayBuffer();
+    })
+    .then(async buffer => {
+      if (!validatePdfMagicBytes(buffer)) {
+        throw new Error('El archivo no tiene cabeceras de PDF válidas.');
+      }
+      await validatePdfStructure(buffer);
+      pdfBytes = buffer;
+
+      // Extract filename
+      let name = 'albaran_transfont.pdf';
+      try {
+        const urlObj = new URL(pdfUrl);
+        const pathname = urlObj.pathname;
+        const base = pathname.substring(pathname.lastIndexOf('/') + 1);
+        if (base && base.endsWith('.pdf')) {
+          name = base;
+        }
+      } catch(e) {}
+      pdfFileName = sanitizeFilename(name);
+      sanitizeHtmlContent(pdfMetaName, pdfFileName);
+
+      const doc = await pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
+      validatePageCount(doc.numPages);
+      pdfDoc = doc;
+      totalPages = pdfDoc.numPages;
+      currentPage = 1;
+
+      pdfLibDocInstance = await PDFDocument.load(pdfBytes);
+      await loadPdfFormFields();
+
+      dropzone.classList.add('hidden');
+      previewWorkspaceControls.classList.remove('hidden');
+      currentAppState = APP_STATES.WORKSPACE;
+
+      await renderPreviewPage(1);
+      applyPreset('bottom-right');
+      showToast('Documento cargado. Revísalo completamente antes de firmar.', 'success');
+      logSecurityEvent('PDF loaded via QR param', 'info');
+    })
+    .catch(err => {
+      showToast('Error al descargar el PDF: ' + err.message, 'error');
+      logSecurityEvent('QR PDF download failed: ' + err.message, 'warning');
+    });
+}
+
+// Send digital copy to remote server API
+async function sendSignedPdfToServer(pdfBytesArray, filename) {
+  if (!sendCopyCheckbox || !sendCopyCheckbox.checked) return;
+
+  const apiUrl = sendCopyUrlInput.value.trim();
+  if (!apiUrl) return;
+
+  showToast('Enviando copia al servidor de Transfont...', 'info');
+
+  const blob = new Blob([pdfBytesArray], { type: 'application/pdf' });
+  const formData = new FormData();
+  formData.append('file', blob, filename);
+  formData.append('documentName', filename);
+  formData.append('timestamp', new Date().toISOString());
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (response.ok) {
+      showToast('¡Copia digital enviada con éxito a Transfont!', 'success');
+      logSecurityEvent('Signed PDF copy uploaded to Transfont API', 'info');
+    } else {
+      throw new Error(`Servidor respondió con código: ${response.status}`);
+    }
+  } catch (err) {
+    console.warn('API upload failed, saving for offline sync:', err.message);
+    saveForOfflineSync(pdfBytesArray, filename, apiUrl);
+  }
+}
+
+// Offline backup storage
+function saveForOfflineSync(pdfBytesArray, filename, apiUrl) {
+  try {
+    const pendingSyncs = JSON.parse(localStorage.getItem('pending_transfont_syncs') || '[]');
+    
+    // Convert Uint8Array to Base64 for safe localStorage storage
+    const binaryString = Array.from(new Uint8Array(pdfBytesArray))
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+    const base64Data = btoa(binaryString);
+
+    pendingSyncs.push({
+      id: 'sync-' + Date.now(),
+      filename: filename,
+      data: base64Data,
+      url: apiUrl,
+      timestamp: new Date().toISOString()
+    });
+
+    localStorage.setItem('pending_transfont_syncs', JSON.stringify(pendingSyncs));
+    showToast('Sin cobertura. Albarán guardado localmente para sincronización automática.', 'warning');
+    logSecurityEvent('API upload failed, document cached for offline sync', 'warning');
+  } catch (err) {
+    console.error('Failed to cache document for offline sync:', err);
+  }
+}
+
+// Synchronize pending documents when connection is restored
+async function syncPendingTransfontDocuments() {
+  const pendingSyncs = JSON.parse(localStorage.getItem('pending_transfont_syncs') || '[]');
+  if (pendingSyncs.length === 0) return;
+
+  showToast(`Sincronizando ${pendingSyncs.length} albarán(es) pendiente(s)...`, 'info');
+  const remainingSyncs = [];
+
+  for (const syncItem of pendingSyncs) {
+    try {
+      const binaryString = atob(syncItem.data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const formData = new FormData();
+      formData.append('file', blob, syncItem.filename);
+      formData.append('documentName', syncItem.filename);
+      formData.append('timestamp', syncItem.timestamp);
+
+      const response = await fetch(syncItem.url, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        logSecurityEvent(`Offline doc ${syncItem.filename} synced successfully`, 'info');
+      } else {
+        remainingSyncs.push(syncItem);
+      }
+    } catch (err) {
+      remainingSyncs.push(syncItem);
+    }
+  }
+
+  localStorage.setItem('pending_transfont_syncs', JSON.stringify(remainingSyncs));
+  
+  if (remainingSyncs.length === 0) {
+    showToast('Sincronización completada. Albaranes enviados al servidor.', 'success');
+  } else {
+    showToast(`Error al sincronizar ${remainingSyncs.length} albarán(es). Se reintentará al recuperar cobertura.`, 'warning');
+  }
+}
+
+// Event listener for online state
+window.addEventListener('online', syncPendingTransfontDocuments);
+
+// Trigger initial offline sync check
+if (navigator.onLine) {
+  syncPendingTransfontDocuments();
 }
 
