@@ -1913,3 +1913,266 @@ async function triggerFormFilledPdfReload() {
   }
 }
 
+// --- LOCAL STAMP & SIGNATURE CREATOR (100% PRIVATE) ---
+
+// Draw Modal Elements
+const openDrawModalBtn = document.getElementById('open-draw-modal-btn');
+const drawModal = document.getElementById('draw-modal');
+const sigCanvas = document.getElementById('signature-pad-canvas');
+const sigPenWidth = document.getElementById('sig-pen-width');
+const sigPenColor = document.getElementById('sig-pen-color');
+const sigClearBtn = document.getElementById('sig-clear-btn');
+const sigApplyBtn = document.getElementById('sig-apply-btn');
+const sigCloseBtn = document.getElementById('sig-close-btn');
+
+// Text Stamp Modal Elements
+const openTextStampModalBtn = document.getElementById('open-text-stamp-modal-btn');
+const textStampModal = document.getElementById('text-stamp-modal');
+const tsLine1 = document.getElementById('ts-line1');
+const tsLine2 = document.getElementById('ts-line2');
+const tsLine3 = document.getElementById('ts-line3');
+const tsLine4 = document.getElementById('ts-line4');
+const tsColor = document.getElementById('ts-color');
+const tsShape = document.getElementById('ts-shape');
+const tsCanvas = document.getElementById('text-stamp-canvas');
+const tsApplyBtn = document.getElementById('ts-apply-btn');
+const tsCloseBtn = document.getElementById('ts-close-btn');
+
+// --- 1. SIGNATURE PAD DRAWING LOGIC ---
+let isDrawingSig = false;
+let lastSigX = 0;
+let lastSigY = 0;
+let sigCtx = null;
+
+if (sigCanvas) {
+  sigCtx = sigCanvas.getContext('2d');
+
+  function getCanvasCoords(e, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  function startDrawingSig(e) {
+    e.preventDefault();
+    isDrawingSig = true;
+    const coords = getCanvasCoords(e, sigCanvas);
+    lastSigX = coords.x;
+    lastSigY = coords.y;
+  }
+
+  function drawSig(e) {
+    if (!isDrawingSig) return;
+    e.preventDefault();
+    const coords = getCanvasCoords(e, sigCanvas);
+
+    sigCtx.beginPath();
+    sigCtx.moveTo(lastSigX, lastSigY);
+    sigCtx.lineTo(coords.x, coords.y);
+    sigCtx.strokeStyle = sigPenColor.value;
+    sigCtx.lineWidth = parseInt(sigPenWidth.value, 10);
+    sigCtx.lineCap = 'round';
+    sigCtx.lineJoin = 'round';
+    sigCtx.stroke();
+
+    lastSigX = coords.x;
+    lastSigY = coords.y;
+  }
+
+  function stopDrawingSig() {
+    isDrawingSig = false;
+  }
+
+  // Mouse events
+  sigCanvas.addEventListener('mousedown', startDrawingSig);
+  sigCanvas.addEventListener('mousemove', drawSig);
+  sigCanvas.addEventListener('mouseup', stopDrawingSig);
+  sigCanvas.addEventListener('mouseleave', stopDrawingSig);
+
+  // Touch events
+  sigCanvas.addEventListener('touchstart', startDrawingSig, { passive: false });
+  sigCanvas.addEventListener('touchmove', drawSig, { passive: false });
+  sigCanvas.addEventListener('touchend', stopDrawingSig);
+}
+
+// Draw modal buttons
+if (openDrawModalBtn) {
+  openDrawModalBtn.addEventListener('click', () => {
+    drawModal.classList.remove('hidden');
+    if (sigCtx) {
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    }
+  });
+}
+
+if (sigClearBtn) {
+  sigClearBtn.addEventListener('click', () => {
+    if (sigCtx) {
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    }
+  });
+}
+
+if (sigCloseBtn) {
+  sigCloseBtn.addEventListener('click', () => {
+    drawModal.classList.add('hidden');
+  });
+}
+
+if (sigApplyBtn) {
+  sigApplyBtn.addEventListener('click', () => {
+    if (!sigCanvas) return;
+    
+    const dataUrl = sigCanvas.toDataURL('image/png');
+    stampImageSrc = dataUrl;
+
+    // Load signature image in preview overlay
+    stampOverlayContent.innerHTML = `<img src="${stampImageSrc}" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />`;
+    
+    aspectRatio = sigCanvas.width / sigCanvas.height;
+    updateStampSizeAndPosition();
+
+    drawModal.classList.add('hidden');
+    showToast('Firma manuscrita cargada localmente', 'success');
+    logSecurityEvent('Handdrawn signature applied locally', 'info');
+  });
+}
+
+// --- 2. TEXT STAMP GENERATION LOGIC ---
+let tsCtx = null;
+
+if (tsCanvas) {
+  tsCtx = tsCanvas.getContext('2d');
+
+  function renderTextStamp() {
+    if (!tsCtx) return;
+    tsCtx.clearRect(0, 0, tsCanvas.width, tsCanvas.height);
+
+    const color = tsColor.value;
+    const shape = tsShape.value;
+    const padding = 15;
+
+    tsCtx.strokeStyle = color;
+    tsCtx.lineWidth = 4;
+
+    // Border Shapes
+    if (shape === 'rect') {
+      tsCtx.strokeRect(padding, padding, tsCanvas.width - padding * 2, tsCanvas.height - padding * 2);
+      tsCtx.lineWidth = 1.5;
+      tsCtx.strokeRect(padding + 5, padding + 5, tsCanvas.width - padding * 2 - 10, tsCanvas.height - padding * 2 - 10);
+    } else if (shape === 'round-rect') {
+      const x = padding;
+      const y = padding;
+      const w = tsCanvas.width - padding * 2;
+      const h = tsCanvas.height - padding * 2;
+      const r = 16;
+      
+      // Outer border
+      tsCtx.beginPath();
+      tsCtx.moveTo(x + r, y);
+      tsCtx.lineTo(x + w - r, y);
+      tsCtx.quadraticCurveTo(x + w, y, x + w, y + r);
+      tsCtx.lineTo(x + w, y + h - r);
+      tsCtx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      tsCtx.lineTo(x + r, y + h);
+      tsCtx.quadraticCurveTo(x, y + h, x, y + h - r);
+      tsCtx.lineTo(x, y + r);
+      tsCtx.quadraticCurveTo(x, y, x + r, y);
+      tsCtx.closePath();
+      tsCtx.stroke();
+
+      // Inner border
+      tsCtx.lineWidth = 1.5;
+      const ix = x + 5;
+      const iy = y + 5;
+      const iw = w - 10;
+      const ih = h - 10;
+      const ir = 12;
+
+      tsCtx.beginPath();
+      tsCtx.moveTo(ix + ir, iy);
+      tsCtx.lineTo(ix + iw - ir, iy);
+      tsCtx.quadraticCurveTo(ix + iw, iy, ix + iw, iy + ir);
+      tsCtx.lineTo(ix + iw, iy + ih - ir);
+      tsCtx.quadraticCurveTo(ix + iw, iy + ih, ix + iw - ir, iy + ih);
+      tsCtx.lineTo(ix + ir, iy + ih);
+      tsCtx.quadraticCurveTo(ix, iy + ih, ix, iy + ih - ir);
+      tsCtx.lineTo(ix, iy + ir);
+      tsCtx.quadraticCurveTo(ix, iy, ix + ir, iy);
+      tsCtx.closePath();
+      tsCtx.stroke();
+    }
+
+    // Texts Rendering
+    tsCtx.fillStyle = color;
+    tsCtx.textAlign = 'center';
+    tsCtx.textBaseline = 'middle';
+
+    // Line 1: Organization name
+    tsCtx.font = 'bold 13px Courier New, sans-serif';
+    tsCtx.fillText(tsLine1.value.toUpperCase(), tsCanvas.width / 2, 42);
+
+    // Line 2: Approved / Signed state
+    tsCtx.font = 'bold 18px Helvetica, Arial, sans-serif';
+    tsCtx.fillText(tsLine2.value.toUpperCase(), tsCanvas.width / 2, 70);
+
+    // Line 3: Timestamp
+    tsCtx.font = '10px Courier New, sans-serif';
+    tsCtx.fillText(tsLine3.value, tsCanvas.width / 2, 98);
+
+    // Line 4: Signature ID/Code
+    tsCtx.font = 'italic 9px Arial, sans-serif';
+    tsCtx.fillText(tsLine4.value, tsCanvas.width / 2, 118);
+  }
+
+  // Bind live preview listeners
+  [tsLine1, tsLine2, tsLine3, tsLine4, tsColor, tsShape].forEach(el => {
+    if (el) {
+      el.addEventListener('input', renderTextStamp);
+      el.addEventListener('change', renderTextStamp);
+    }
+  });
+}
+
+// Text stamp buttons
+if (openTextStampModalBtn) {
+  openTextStampModalBtn.addEventListener('click', () => {
+    textStampModal.classList.remove('hidden');
+    
+    // Set date line dynamically
+    const now = new Date();
+    tsLine3.value = `FECHA: ${now.toLocaleDateString('es-ES')} ${now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+    
+    renderTextStamp();
+  });
+}
+
+if (tsCloseBtn) {
+  tsCloseBtn.addEventListener('click', () => {
+    textStampModal.classList.add('hidden');
+  });
+}
+
+if (tsApplyBtn) {
+  tsApplyBtn.addEventListener('click', () => {
+    if (!tsCanvas) return;
+
+    const dataUrl = tsCanvas.toDataURL('image/png');
+    stampImageSrc = dataUrl;
+
+    // Load signature image in preview overlay
+    stampOverlayContent.innerHTML = `<img src="${stampImageSrc}" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />`;
+
+    aspectRatio = tsCanvas.width / tsCanvas.height;
+    updateStampSizeAndPosition();
+
+    textStampModal.classList.add('hidden');
+    showToast('Sello de texto profesional cargado localmente', 'success');
+    logSecurityEvent('Text stamp applied locally', 'info');
+  });
+}
+

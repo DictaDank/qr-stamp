@@ -79,6 +79,17 @@
                 <input type="file" id="stamp-image-input" accept="image/png, image/jpeg" class="hidden" />
               </div>
             </div>
+            <div class="form-group" style="margin-top: 1rem;">
+              <label class="form-label">¿No tienes un sello o firma?</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="button" id="open-draw-modal-btn" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.6rem 0.25rem; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                  ✍️ Dibujar
+                </button>
+                <button type="button" id="open-text-stamp-modal-btn" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 0.6rem 0.25rem; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                  🏢 Crear Sello
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Tab Content: QR Code -->
@@ -351,6 +362,95 @@
         <a href="./technical-details.html" style="color: #c5a880; text-decoration: none; border-bottom: 1px solid #c5a880;">Detalles Técnicos</a>
       </p>
     </footer>
+
+    <!-- Draw Signature Modal -->
+    <div id="draw-modal" class="modal-overlay hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 2100; backdrop-filter: blur(4px);">
+      <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; width: 90%; max-width: 480px; box-shadow: 0 10px 45px rgba(0,0,0,0.5);">
+        <h3 style="font-size: 1.25rem; margin-bottom: 1.5rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+          ✍️ Dibujar Firma a Mano
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Dibuja tu firma en el recuadro inferior. El procesamiento es 100% local en tu navegador.
+        </p>
+        
+        <div style="position: relative; margin-bottom: 1rem;">
+          <canvas id="signature-pad-canvas" width="400" height="200" style="background: rgba(255,255,255,0.01); border: 2px dashed var(--border-color); border-radius: 12px; cursor: crosshair; display: block; width: 100%; height: 200px; touch-action: none;"></canvas>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Grosor:</span>
+            <input type="range" id="sig-pen-width" min="1" max="10" value="3" style="width: 80px; accent-color: var(--primary);" />
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Color:</span>
+            <input type="color" id="sig-pen-color" value="#1e40af" style="width: 40px; height: 24px; border: 1px solid var(--border-color); border-radius: 4px; background: none; cursor: pointer;" />
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button type="button" id="sig-clear-btn" class="btn btn-secondary" style="flex: 1;">Limpiar</button>
+          <button type="button" id="sig-apply-btn" class="btn btn-primary" style="flex: 1; color: var(--bg-main); font-weight: bold;">Aplicar Firma</button>
+        </div>
+        <button type="button" id="sig-close-btn" class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Text Stamp Modal -->
+    <div id="text-stamp-modal" class="modal-overlay hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 2100; backdrop-filter: blur(4px);">
+      <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; width: 90%; max-width: 600px; box-shadow: 0 10px 45px rgba(0,0,0,0.5);">
+        <h3 style="font-size: 1.25rem; margin-bottom: 1.5rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+          🏢 Diseñar Sello de Texto Profesional
+        </h3>
+        
+        <div style="display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1.5rem;">
+          <!-- Controls -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="ts-line1">Línea 1 (Organización)</label>
+              <input type="text" id="ts-line1" class="text-input" value="ORGANIZACIÓN" style="font-size: 0.85rem;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ts-line2">Línea 2 (Estado)</label>
+              <input type="text" id="ts-line2" class="text-input" value="APROBADO" style="font-size: 0.85rem;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ts-line3">Línea 3 (Detalle / Fecha)</label>
+              <input type="text" id="ts-line3" class="text-input" value="FECHA: DD/MM/AAAA" style="font-size: 0.85rem;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ts-line4">Línea 4 (Código / ID)</label>
+              <input type="text" id="ts-line4" class="text-input" value="FIRMA ELECTRÓNICA" style="font-size: 0.85rem;" />
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 1rem; align-items: center;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" for="ts-color">Color del Sello</label>
+              <input type="color" id="ts-color" value="#991b1b" style="width: 100%; height: 36px; border: 1px solid var(--border-color); border-radius: 8px; background: none; cursor: pointer;" />
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" for="ts-shape">Forma del Sello</label>
+              <select id="ts-shape" class="select-input" style="height: 36px;">
+                <option value="rect">Rectángulo</option>
+                <option value="round-rect">Rectángulo Redondeado</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Preview Canvas -->
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">VISTA PREVIA LOCAL</span>
+            <canvas id="text-stamp-canvas" width="300" height="150" style="background: transparent; max-width: 100%; height: auto;"></canvas>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button type="button" id="ts-apply-btn" class="btn btn-primary" style="flex: 1; color: var(--bg-main); font-weight: bold;">Aplicar Sello</button>
+          <button type="button" id="ts-close-btn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
