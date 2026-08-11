@@ -251,7 +251,7 @@ function getKeyUsage(cert) {
 function determineCertificateType(cert) {
   const issuerString = formatDN(cert.issuer);
 
-  if (issuerString.includes('DNI') || issuerString.includes('Dirección General")) {
+  if (issuerString.includes('DNI') || issuerString.includes('Dirección General')) {
     return CERT_TYPES.DNI;
   }
   if (issuerString.includes('FNMT') || issuerString.includes('Fabrica Nacional')) {
